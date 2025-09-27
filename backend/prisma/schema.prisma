@@ -1,0 +1,161 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// Local vendor/supplier information
+model LocalVendor {
+  id         String   @id @default(cuid())
+  name       String
+  contact    String?   // Phone number or email
+  notes      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  materials  Material[] // Optional future link
+  
+  // Relations
+  prices        LocalVendorPrice[]
+  tasks         Task[]
+  receipts      Receipt[]
+}
+
+// Material catalog (optional future feature)
+model Material {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  category    String?
+  unit        String?   // "sqft", "piece", "gallon", etc.
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  vendors     LocalVendor[]
+}
+
+// Vendor-specific pricing for materials
+model LocalVendorPrice {
+  id           String      @id @default(cuid())
+  vendor       LocalVendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  vendorId     String
+  materialKey  String      // normalized name, e.g. "joint_compound"
+  materialName String      // original name for display
+  unitPrice    Decimal
+  unitLabel    String      // "bag", "sheet", "gal", etc.
+  category     String?     @default("General")
+  confidence   Float       @default(1.0)
+  lastUpdated  DateTime    @default(now())
+  receiptId    String?
+
+  // Relations
+  receipt      Receipt?    @relation(fields: [receiptId], references: [id])
+
+  @@unique([vendorId, materialKey])
+}
+
+// Receipt storage and processing
+model Receipt {
+  id           String             @id @default(cuid())
+  vendor       LocalVendor        @relation(fields: [vendorId], references: [id])
+  vendorId     String
+  receiptDate  DateTime
+  uploadDate   DateTime           @default(now())
+  total        Decimal
+  subtotal     Decimal?
+  tax          Decimal?
+  category     String?            @default("General")
+  project      String?            // Legacy field - keeping for backward compatibility
+  projectId    String?            // New field for proper project relation
+  ocrConfidence Float             @default(0.0)
+  verified     Boolean            @default(false)
+  
+  // File information
+  fileName     String?
+  fileSize     Int?
+  mimeType     String?
+  
+  // Relations
+  items        ReceiptItem[]
+  prices       LocalVendorPrice[]
+  projectRef   Project?           @relation(fields: [projectId], references: [id])
+}
+
+// Individual items from receipts
+model ReceiptItem {
+  id          String   @id @default(cuid())
+  receipt     Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  receiptId   String
+  description String
+  category    String?
+  quantity    Decimal
+  unit        String
+  unitPrice   Decimal
+  totalPrice  Decimal
+  sku         String?
+  confidence  Float    @default(0.0)
+}
+
+// Project tasks with optional vendor associations
+model Task {
+  id             String       @id @default(cuid())
+  name           String
+  description    String?
+  estimatedCost  Decimal      @default(0)
+  actualCost     Decimal      @default(0)
+  status         String       @default("pending")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  
+  // Optional vendor association
+  localVendorId  String?
+  localVendor    LocalVendor? @relation(fields: [localVendorId], references: [id])
+  
+  // Project association
+  projectId      String?
+  project        Project?     @relation(fields: [projectId], references: [id])
+}
+
+// Project management
+model Project {
+  id           String   @id @default(cuid())
+  name         String
+  clientName   String?
+  clientEmail  String?
+  clientPhone  String?
+  address      String?
+  jobType      String?
+  description  String?
+  timeline     String?
+  budget       String?
+  status       String   @default("active")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  // Relations
+  tasks        Task[]
+  estimates    Estimate[]
+  receipts     Receipt[]
+}
+
+// Estimate history
+model Estimate {
+  id           String   @id @default(cuid())
+  project      Project  @relation(fields: [projectId], references: [id])
+  projectId    String
+  estimateType String   // "manual", "ai", "hybrid"
+  totalCost    Decimal
+  markup       Decimal  @default(15)
+  createdAt    DateTime @default(now())
+  
+  // Estimate data (JSON)
+  roomData     String?  // JSON string of room details
+  aiResponse   String?  // AI-generated estimate text
+  pdfPath      String?  // Path to generated PDF
+}
