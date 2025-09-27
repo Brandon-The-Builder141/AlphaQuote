@@ -1,3 +1,10 @@
+/**
+ * @fileoverview AlphaQuote AI Assistant Component
+ * Provides voice-controlled AI estimation with real-time streaming and PDF export
+ * @author AlphaQuote Team
+ * @version 1.0.0
+ */
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import jsPDF from 'jspdf';
@@ -7,6 +14,30 @@ import streamAlpha from './core/streamAlpha';
 import { saveEstimateToMemory } from './core/alphaMemory';
 import { demoAIEstimate } from './utils/demoData';
 
+/**
+ * AlphaBot AI Assistant Component
+ * Main component for voice-controlled AI estimation with streaming responses
+ * 
+ * Features:
+ * - Voice recognition for hands-free project description
+ * - Real-time AI estimate streaming
+ * - Image upload for visual project analysis
+ * - PDF export of generated estimates
+ * - Memory integration for learning from past projects
+ * 
+ * @component
+ * @returns {JSX.Element} The AlphaBot AI Assistant interface
+ * 
+ * @example
+ * // Use in routing
+ * <Route path="/ai-assistant" component={AlphaBot} />
+ * 
+ * @example
+ * // Access voice features
+ * const alphaBot = <AlphaBot />;
+ * // User can hold mic button to speak project description
+ * // AI will generate streaming estimate in real-time
+ */
 export default function AlphaBot() {
   const navigate = useNavigate();
   const [isListening, setIsListening] = useState(false);
@@ -65,6 +96,22 @@ export default function AlphaBot() {
     }
   }, [transcript]);
 
+  /**
+   * Adds a message to the chat log for conversation tracking
+   * Creates a timestamped message entry for both user and AI responses
+   * 
+   * @param {string} sender - Message sender ('user' or 'assistant')
+   * @param {string} message - The message content to add
+   * @returns {void}
+   * 
+   * @example
+   * // Add user message
+   * addToChatLog('user', 'I need a kitchen renovation estimate');
+   * 
+   * @example
+   * // Add AI response
+   * addToChatLog('assistant', 'I\'ll generate an estimate for your kitchen renovation');
+   */
   const addToChatLog = (sender, message) => {
     setChatLog(prev => [...prev, {
       id: Date.now(),
@@ -123,6 +170,24 @@ export default function AlphaBot() {
     }));
   };
 
+  /**
+   * Generates a smart AI estimate using voice transcript and form data
+   * Integrates with streaming AI service and saves results to memory
+   * Handles errors gracefully and provides fallback responses
+   * 
+   * @async
+   * @function generateSmartEstimate
+   * @returns {Promise<void>} Resolves when estimate generation is complete
+   * 
+   * @example
+   * // Generate estimate from voice input
+   * await generateSmartEstimate();
+   * // AI will process voice transcript and form data
+   * // Streaming estimate will appear in real-time
+   * // Final estimate will be saved to memory
+   * 
+   * @throws {Error} When AI service is unavailable or returns an error
+   */
   const generateSmartEstimate = async () => {
     setIsGenerating(true);
     setShowEstimate(true);
@@ -173,6 +238,24 @@ export default function AlphaBot() {
     }
   };
 
+  /**
+   * Exports the generated AI estimate as a professional PDF document
+   * Formats the estimate with proper styling, branding, and business information
+   * Includes chat context and project details in the PDF
+   * 
+   * @function handleExportAIPDF
+   * @returns {void}
+   * 
+   * @example
+   * // Export current estimate to PDF
+   * handleExportAIPDF();
+   * // PDF will be automatically downloaded with filename format:
+   * // AlphaQuote_AI_Estimate_YYYY-MM-DD.pdf
+   * 
+   * @requires {streamedEstimate} Must have a generated estimate to export
+   * @requires {jsPDF} PDF generation library
+   * @requires {autoTable} Table formatting for PDF
+   */
   const handleExportAIPDF = () => {
     if (!streamedEstimate) {
       alert('Please generate an AI estimate first before exporting.');

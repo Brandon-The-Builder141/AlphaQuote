@@ -1,10 +1,29 @@
-// streamAlpha.js
+/**
+ * @fileoverview AlphaQuote AI Streaming Estimation Engine
+ * Provides real-time streaming AI estimates with live price data integration
+ * @author AlphaQuote Team
+ * @version 1.0.0
+ */
+
 import { getMemoryContext } from "./alphaMemory";
 
 /**
- * Get common materials for a room type
- * @param {string} roomType - Type of room
- * @returns {Array} Array of material names
+ * Gets common materials for a specific room type
+ * Used to enhance material cost calculations and suggestions
+ * 
+ * @param {string} roomType - Type of room (e.g., 'Kitchen', 'Bathroom')
+ * @returns {Array<string>} Array of material names relevant to the room type
+ * 
+ * @example
+ * // Get kitchen materials
+ * const materials = getMaterialsForRoomType('Kitchen');
+ * console.log(materials);
+ * // Output: ['kitchen cabinets', 'countertops', 'kitchen flooring', ...]
+ * 
+ * @example
+ * // Use in estimation
+ * const roomMaterials = getMaterialsForRoomType(formData.roomType);
+ * const materialCost = calculateMaterialCost(roomMaterials, sqft);
  */
 const getMaterialsForRoomType = (roomType) => {
   const materialMap = {
@@ -19,6 +38,64 @@ const getMaterialsForRoomType = (roomType) => {
   return materialMap[roomType.toLowerCase()] || materialMap['general'];
 };
 
+/**
+ * Generates a streaming AI estimate with real-time price data integration
+ * Provides live updates to the UI as the estimate is being generated
+ * Falls back to standard calculation if AI service is unavailable
+ * 
+ * @param {Object} params - The streaming estimation parameters
+ * @param {string} params.transcript - Voice transcript or text description of the project
+ * @param {Object} params.formData - Form data from the user interface
+ * @param {string} params.formData.roomType - Type of room (Kitchen, Bathroom, etc.)
+ * @param {string|number} params.formData.squareFootage - Project square footage
+ * @param {string} params.formData.notes - Additional project notes
+ * @param {Object} params.profile - Company profile information
+ * @param {string} params.profile.businessName - Company name
+ * @param {number} params.profile.laborRate - Hourly labor rate
+ * @param {number} params.profile.markup - Markup percentage
+ * @param {string} params.profile.materialVendor - Preferred material vendor
+ * @param {string} [params.profile.zipCode] - ZIP code for local pricing
+ * @param {Function} params.onUpdate - Callback function called with partial results
+ * @param {string} params.onUpdate.partialResult - Partial estimate text as it's generated
+ * 
+ * @returns {Promise<string>} Complete AI-generated estimate text
+ * 
+ * @throws {Error} When AI service is unavailable (falls back to standard calculation)
+ * 
+ * @example
+ * // Generate streaming estimate with live updates
+ * const estimate = await streamAlpha({
+ *   transcript: "Kitchen renovation with granite countertops",
+ *   formData: {
+ *     roomType: "Kitchen",
+ *     squareFootage: 200,
+ *     notes: "High-end renovation"
+ *   },
+ *   profile: {
+ *     businessName: "ABC Construction",
+ *     laborRate: 75,
+ *     markup: 15,
+ *     zipCode: "90210"
+ *   },
+ *   onUpdate: (partialResult) => {
+ *     console.log('Partial estimate:', partialResult);
+ *     // Update UI with partial result
+ *   }
+ * });
+ * 
+ * @example
+ * // Use in React component
+ * const [estimate, setEstimate] = useState('');
+ * 
+ * const generateEstimate = async () => {
+ *   await streamAlpha({
+ *     transcript,
+ *     formData,
+ *     profile,
+ *     onUpdate: (partial) => setEstimate(partial)
+ *   });
+ * };
+ */
 export default async function streamAlpha({ transcript, formData, profile, onUpdate }) {
   const memory = getMemoryContext();
   
@@ -153,7 +230,32 @@ Respond as if you're writing a professional estimate for a client.
   }
 }
 
-// Fallback estimation function when AI is unavailable
+/**
+ * Generates a fallback estimate using standard industry calculations
+ * Used when AI service is unavailable or returns an error
+ * Provides basic cost breakdown based on room type and square footage
+ * 
+ * @param {Object} formData - Form data from the user interface
+ * @param {string} formData.roomType - Type of room (Kitchen, Bathroom, etc.)
+ * @param {string|number} formData.squareFootage - Project square footage
+ * @param {Object} profile - Company profile information
+ * @param {string} profile.businessName - Company name
+ * @param {number} profile.markup - Markup percentage
+ * @param {string} materialPricing - Material pricing information from scrapers
+ * @param {string} memory - Memory context from previous estimates
+ * 
+ * @returns {string} Formatted fallback estimate with cost breakdown
+ * 
+ * @example
+ * // Generate fallback estimate
+ * const fallback = generateFallbackEstimate(
+ *   { roomType: 'Kitchen', squareFootage: 200 },
+ *   { businessName: 'ABC Construction', markup: 15 },
+ *   'Material pricing data...',
+ *   'Memory context...'
+ * );
+ * console.log(fallback);
+ */
 function generateFallbackEstimate(formData, profile, materialPricing, memory) {
   const sqft = parseInt(formData.squareFootage) || 0;
   const roomType = formData.roomType || 'General Room';
