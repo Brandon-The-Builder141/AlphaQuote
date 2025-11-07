@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { showSuccess, showError } from '../utils/toastService';
+import { API_BASE_URL } from '../config/env';
 
 export default function ReceiptDetail() {
   const { id } = useParams();
@@ -17,7 +19,7 @@ export default function ReceiptDetail() {
   const fetchReceipt = async (receiptId) => {
     try {
       setLoading(true);
-      const response = await fetch(`http://localhost:3001/api/receipts/${receiptId}`);
+      const response = await fetch(`${API_BASE_URL}/api/receipts/${receiptId}`);
 
       if (!response.ok) {
         if (response.status === 404) {
@@ -67,7 +69,7 @@ export default function ReceiptDetail() {
     }
 
     try {
-      const response = await fetch(`http://localhost:3001/api/receipts/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/receipts/${id}`, {
         method: 'DELETE'
       });
 
@@ -75,11 +77,11 @@ export default function ReceiptDetail() {
         throw new Error('Failed to delete receipt');
       }
 
-      // alert('Receipt deleted successfully'); // TODO: Replace with proper error handling
+      showSuccess('Receipt deleted successfully!');
       navigate('/receipts');
     } catch (err) {
       console.error('Error deleting receipt:', err);
-      // alert('Failed to delete receipt. Please try again.'); // TODO: Replace with proper error handling
+      showError('Failed to delete receipt. Please try again.');
     }
   };
 

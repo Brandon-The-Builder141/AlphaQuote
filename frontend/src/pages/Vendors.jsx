@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { showSuccess, showError } from '../utils/toastService';
+import { API_BASE_URL } from '../config/env';
 import {
   Store,
   ArrowLeft,
@@ -11,7 +13,9 @@ import {
   Calendar,
   DollarSign,
   Receipt,
-  TrendingUp
+  TrendingUp,
+  ExternalLink,
+  Globe
 } from 'lucide-react';
 
 export default function Vendors() {
@@ -27,7 +31,7 @@ export default function Vendors() {
   const loadVendors = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:3001/api/vendors');
+      const response = await fetch(`${API_BASE_URL}/api/vendors`);
 
       if (!response.ok) {
         throw new Error('Failed to load vendors');
@@ -58,7 +62,7 @@ export default function Vendors() {
   const handleDeleteVendor = async (vendorId) => {
     if (window.confirm('Are you sure you want to delete this vendor?')) {
       try {
-        const response = await fetch(`http://localhost:3001/api/vendors/${vendorId}`, {
+        const response = await fetch(`${API_BASE_URL}/api/vendors/${vendorId}`, {
           method: 'DELETE'
         });
 
@@ -70,10 +74,11 @@ export default function Vendors() {
         const result = await response.json();
         if (result.success) {
           setVendors(vendors.filter(v => v.id !== vendorId));
+          showSuccess('Vendor deleted successfully!');
         }
       } catch (error) {
         console.error('Error deleting vendor:', error);
-        // alert(`Failed to delete vendor: ${error.message}`); // TODO: Replace with proper error handling
+        showError(`Failed to delete vendor: ${error.message}`);
       }
     }
   };
@@ -307,6 +312,21 @@ export default function Vendors() {
                   <div className="mb-3">
                     <p className="text-sm text-slate-400 font-body">Contact</p>
                     <p className="text-slate-300 font-body">{vendor.contact}</p>
+                  </div>
+                )}
+
+                {vendor.websiteUrl && (
+                  <div className="mb-3">
+                    <motion.button
+                      onClick={() => window.open(vendor.websiteUrl, '_blank', 'noopener,noreferrer')}
+                      className="flex items-center gap-2 text-sm text-primary hover:text-primary/80 font-body transition-colors"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <Globe className="w-4 h-4" />
+                      <span className="truncate">{vendor.websiteUrl.replace(/^https?:\/\//, '')}</span>
+                      <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                    </motion.button>
                   </div>
                 )}
 

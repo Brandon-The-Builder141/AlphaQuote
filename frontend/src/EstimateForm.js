@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { loadDemoData } from './utils/demoData';
 import PricingAssistant from './components/PricingAssistant';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import ChangeOrderManager from './components/ChangeOrderManager';
+import RegionalPricePack from './components/RegionalPricePack';
+import TaskTemplates from './components/TaskTemplates';
+import CartImportFlow from './components/CartImportFlow';
+import { API_BASE_URL } from './config/env';
+import { generateQuotePDF } from './utils/pdfService';
+import { showSuccess, showError } from './utils/toastService';
 import {
   Calculator,
   Plus,
@@ -12,11 +17,15 @@ import {
   ArrowLeft,
   DollarSign,
   Square,
-  Package
+  Package,
+  FileText,
+  MapPin,
+  Star,
+  ShoppingCart
 } from 'lucide-react';
 
 // Move RoomCard outside to prevent re-creation on every render
-const RoomCard = React.memo(({ room, onUpdate, onRemove, roomCost, isSingle }) => {
+const RoomCard = React.memo(({ room, onUpdate, onRemove, roomCost, isSingle, selectedRegion }) => {
   return (
     <motion.div
       className="bg-slate-900/50 backdrop-blur-sm p-6 rounded-2xl space-y-6 border border-slate-800/50 shadow-lg hover:shadow-xl hover:shadow-primary/10 transition-all duration-300"
@@ -110,6 +119,7 @@ const RoomCard = React.memo(({ room, onUpdate, onRemove, roomCost, isSingle }) =
           materialName={room.material}
           currentPrice={room.materialCost}
           onPriceSelect={(price) => onUpdate({ materialCost: price })}
+          selectedRegion={selectedRegion}
         />
       </div>
 
@@ -234,6 +244,14 @@ const EstimateForm = () => {
     message: ''
   });
   const [emailStatus, setEmailStatus] = useState(null);
+  const [showChangeOrders, setShowChangeOrders] = useState(false);
+  const [changeOrders, setChangeOrders] = useState([]);
+  const [showRegionalPricing, setShowRegionalPricing] = useState(false);
+  const [selectedRegion, setSelectedRegion] = useState('');
+  const [userRegionSelection, setUserRegionSelection] = useState(null);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [showCartImport, setShowCartImport] = useState(false);
 
   const addRoom = () => {
     const newId = Math.max(...rooms.map(r => r.id), 0) + 1;
@@ -260,6 +278,125 @@ const EstimateForm = () => {
     setProjectInfo(prev => ({ ...prev, [field]: value }));
   };
 
+  // Change Order Management Functions
+  const handleAddChangeOrder = (changeOrder) => {
+    setChangeOrders([...changeOrders, changeOrder]);
+  };
+
+  const handleUpdateChangeOrder = (id, updatedData) => {
+    setChangeOrders(changeOrders.map(co => co.id === id ? updatedData : co));
+  };
+
+  const handleRemoveChangeOrder = (id) => {
+    setChangeOrders(changeOrders.filter(co => co.id !== id));
+  };
+
+  const handleAddTasksFromTemplate = (templateTasks) => {
+    // Convert template tasks to room format
+    const newRooms = templateTasks.map((task, index) => ({
+      id: Math.max(...rooms.map(r => r.id), 0) + index + 1,
+      name: task.name || `Task ${index + 1}`,
+      sqft: task.quantity || 100,
+      material: task.category || 'General',
+      materialCost: task.unitPrice || 0,
+      laborHours: Math.max(1, (task.quantity || 100) / 50), // Estimate labor hours
+      demo: false,
+      trim: false,
+      paint: false,
+      notes: task.description || ''
+    }));
+
+    setRooms([...rooms, ...newRooms]);
+  };
+
+  // Handle Cart Import
+  const handleCartImport = (items) => {
+    // Convert imported cart items to rooms format
+    const newRooms = items.map((item, index) => {
+      const totalCost = item.totalPrice || (item.quantity * item.unitPrice);
+      // Estimate square footage based on price if not provided
+      const estimatedSqft = item.quantity || 1;
+      const materialCostPerSqft = totalCost / estimatedSqft;
+
+      return {
+        id: Math.max(...rooms.map(r => r.id), 0) + index + 1,
+        name: item.name,
+        sqft: estimatedSqft,
+        material: item.name,
+        materialCost: materialCostPerSqft.toFixed(2),
+        labor: 'Installation',
+        laborHours: Math.ceil(estimatedSqft / 100), // Estimate 1 hour per 100 sqft
+        demo: false,
+        trim: false,
+        paint: false,
+        notes: item.sku ? `SKU: ${item.sku}` : ''
+      };
+    });
+
+    // If first room is empty, replace it; otherwise add to existing rooms
+    if (rooms.length === 1 && !rooms[0].name && !rooms[0].material) {
+      setRooms(newRooms);
+    } else {
+      setRooms([...rooms, ...newRooms]);
+    }
+
+    showSuccess(`Imported ${items.length} items from cart`);
+  };
+
+  // Regional Pricing Functions
+  const handleRegionChange = async (region) => {
+    setSelectedRegion(region);
+
+    // Save user's region selection
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/user-regional-selection`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: 'default',
+          pricePackId: region // Using region as pricePackId for simplicity
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setUserRegionSelection(data.selection);
+      }
+    } catch (error) {
+      console.error('Failed to save region selection:', error);
+    }
+  };
+
+  const handleMaterialSelect = (material) => {
+    // This will be called when a material is selected from regional pricing
+    // For now, we'll just log it - integration with room cards will be added
+    console.log('Selected material:', material);
+  };
+
+  // Load user's region selection on component mount
+  React.useEffect(() => {
+    const loadUserRegionSelection = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/user-regional-selection?userId=default`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.selection) {
+            setSelectedRegion(data.selection.pricePack.region);
+            setUserRegionSelection(data.selection);
+          } else if (data.defaultRegion) {
+            setSelectedRegion(data.defaultRegion);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load region selection:', error);
+      }
+    };
+
+    loadUserRegionSelection();
+  }, []);
+
   const handleLoadDemoData = () => {
     loadDemoData(setProjectInfo, setRooms, setMarkup, setEstimateType);
     setShowEstimate(false); // Reset estimate display
@@ -273,38 +410,32 @@ const EstimateForm = () => {
 
   // Removed getMaterialsForRoom function since we're using client-specified materials now
 
+  // Import deterministic calculation utilities
+  const {
+    calculateRoomCost: calcRoomCost,
+    calculateSubtotal: calcSubtotal,
+    calculateMarkupAmount: calcMarkupAmount,
+    calculateGrandTotal: calcGrandTotal,
+    formatCurrency
+  } = require('./utils/calculateEstimate');
+
   const calculateRoomCost = (room) => {
-    const sqft = room.sqft || 0;
-    const materialCostPerSqft = parseFloat(room.materialCost) || 0;
-    const laborHours = parseFloat(room.laborHours) || 0;
-    const laborRate = 75; // $75/hour default
-
-    const materialTotal = sqft * materialCostPerSqft;
-    const laborTotal = laborHours * laborRate;
-
-    // Additional services
-    const addOns = (room.demo ? sqft * 0.50 : 0) +
-                   (room.trim ? sqft * 0.75 : 0) +
-                   (room.paint ? sqft * 1.00 : 0);
-
-    return (materialTotal + laborTotal + addOns).toFixed(2);
+    return formatCurrency(calcRoomCost(room));
   };
 
   const calculateSubtotal = () => {
-    return rooms.reduce((total, room) => {
-      return total + parseFloat(calculateRoomCost(room));
-    }, 0).toFixed(2);
+    return formatCurrency(calcSubtotal(rooms, changeOrders));
   };
 
   const calculateMarkupAmount = () => {
     const subtotal = parseFloat(calculateSubtotal());
-    return (subtotal * (markup / 100)).toFixed(2);
+    return formatCurrency(calcMarkupAmount(subtotal, markup));
   };
 
   const calculateTotal = () => {
     const subtotal = parseFloat(calculateSubtotal());
     const markupAmount = parseFloat(calculateMarkupAmount());
-    return (subtotal + markupAmount).toFixed(2);
+    return formatCurrency(calcGrandTotal(subtotal, markupAmount, 0, 0));
   };
 
   const handleGenerateEstimate = () => {
@@ -329,7 +460,7 @@ const EstimateForm = () => {
     try {
       setEmailStatus('sending');
 
-      const response = await fetch('http://localhost:3001/api/email-quote', {
+      const response = await fetch(`${API_BASE_URL}/api/email-quote`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -341,6 +472,7 @@ const EstimateForm = () => {
           quoteData: {
             projectInfo,
             rooms,
+            changeOrders,
             markup,
             subtotal: calculateSubtotal(),
             markupAmount: calculateMarkupAmount(),
@@ -367,68 +499,32 @@ const EstimateForm = () => {
 
   const handleDownloadPDF = async () => {
     try {
-      // Get the quote preview element
-      const quoteElement = document.getElementById('quote-preview');
-      if (!quoteElement) {
-        console.error('Quote preview element not found');
-        return;
-      }
+      setIsGeneratingPDF(true);
 
-      // Create canvas from the quote element
-      const canvas = await html2canvas(quoteElement, {
-        scale: 2, // Higher quality
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        width: quoteElement.scrollWidth,
-        height: quoteElement.scrollHeight
+      // Prepare quote data for PDF
+      const quoteData = {
+        projectInfo,
+        rooms,
+        markup,
+        subtotal: calculateSubtotal(),
+        markupAmount: calculateMarkupAmount(),
+        total: calculateTotal(),
+        notes: projectInfo.notes || '',
+        estimateType: 'Estimate',
+        changeOrders
+      };
+
+      // Generate and download PDF using @react-pdf/renderer
+      await generateQuotePDF(quoteData, (status) => {
+        console.log('PDF Generation:', status);
       });
 
-      // Create PDF
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      // Calculate dimensions to fit the content
-      const imgWidth = 210; // A4 width in mm
-      const pageHeight = 295; // A4 height in mm
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      // Add image to PDF
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      // Add new pages if content is longer than one page
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
-
-      // Generate filename
-      const projectName = projectInfo.projectName || 'Project';
-      const clientName = projectInfo.clientName || 'Client';
-      const date = new Date().toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-      }).replace(/\//g, '-');
-
-      const filename = `AlphaQuote_${projectName}_${clientName}_${date}.pdf`;
-
-      // Download the PDF
-      pdf.save(filename);
-
-      // console.log('✅ PDF generated and downloaded:', filename);
+      showSuccess('PDF downloaded successfully!');
     } catch (error) {
-      console.error('❌ PDF generation failed:', error);
+      console.error('PDF generation failed:', error);
+      showError('Failed to generate PDF. Please try again.');
+    } finally {
+      setIsGeneratingPDF(false);
     }
   };
 
@@ -493,6 +589,64 @@ const EstimateForm = () => {
             </h1>
           </div>
           <div className="flex items-center space-x-4">
+            <motion.button
+              onClick={() => setShowChangeOrders(!showChangeOrders)}
+              className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 ${
+                showChangeOrders
+                  ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/25'
+                  : 'bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white'
+              }`}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <FileText className="w-4 h-4" />
+              <span>Change Orders</span>
+              {changeOrders.length > 0 && (
+                <span className="bg-orange-500 text-white text-xs px-2 py-1 rounded-full ml-1">
+                  {changeOrders.length}
+                </span>
+              )}
+            </motion.button>
+            <motion.button
+              onClick={() => setShowRegionalPricing(!showRegionalPricing)}
+              className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 ${
+                showRegionalPricing
+                  ? 'bg-green-500 text-white shadow-lg shadow-green-500/25'
+                  : 'bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white'
+              }`}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <MapPin className="w-4 h-4" />
+              <span>Regional Pricing</span>
+              {selectedRegion && (
+                <span className="bg-green-500 text-white text-xs px-2 py-1 rounded-full ml-1">
+                  {selectedRegion.split('-')[1] || selectedRegion}
+                </span>
+              )}
+            </motion.button>
+            <motion.button
+              onClick={() => setShowTemplates(!showTemplates)}
+              className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 ${
+                showTemplates
+                  ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25'
+                  : 'bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white'
+              }`}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <Star className="w-4 h-4" />
+              <span>Quick Templates</span>
+            </motion.button>
+            <motion.button
+              onClick={() => setShowCartImport(true)}
+              className="flex items-center space-x-2 px-6 py-3 rounded-xl text-base font-bold transition-all duration-300 bg-gradient-to-r from-accent to-orange-500 hover:from-accent/90 hover:to-orange-500/90 text-white shadow-lg shadow-accent/30"
+              whileHover={{ scale: 1.08, y: -2 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <ShoppingCart className="w-5 h-5" />
+              <span>🛒 Import Cart</span>
+            </motion.button>
             <button
               onClick={() => navigate('/receipts')}
               className="bg-orange-600 hover:bg-orange-500 text-white px-3 py-2 rounded-lg text-xs transition-colors duration-200"
@@ -513,6 +667,44 @@ const EstimateForm = () => {
             </button>
           </div>
         </motion.div>
+
+        {/* Change Orders Module */}
+        {showChangeOrders && (
+          <ChangeOrderManager
+            onAddChangeOrder={handleAddChangeOrder}
+            changeOrders={changeOrders}
+            onUpdateChangeOrder={handleUpdateChangeOrder}
+            onRemoveChangeOrder={handleRemoveChangeOrder}
+          />
+        )}
+
+        {/* Regional Pricing Module */}
+        {showRegionalPricing && (
+          <RegionalPricePack
+            selectedRegion={selectedRegion}
+            onRegionChange={handleRegionChange}
+            onMaterialSelect={handleMaterialSelect}
+            showSuggestions={true}
+          />
+        )}
+
+        {/* Task Templates Module */}
+        {showTemplates && (
+          <TaskTemplates
+            onAddTasks={handleAddTasksFromTemplate}
+            onClose={() => setShowTemplates(false)}
+          />
+        )}
+
+        {/* Cart Import Flow Module */}
+        <AnimatePresence>
+          {showCartImport && (
+            <CartImportFlow
+              onImport={handleCartImport}
+              onClose={() => setShowCartImport(false)}
+            />
+          )}
+        </AnimatePresence>
 
         {/* Project Information */}
         <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
@@ -592,6 +784,7 @@ const EstimateForm = () => {
             onRemove={() => removeRoom(room.id)}
             roomCost={calculateRoomCost(room)}
             isSingle={rooms.length === 1}
+            selectedRegion={selectedRegion}
           />
         ))}
 
@@ -710,11 +903,89 @@ const EstimateForm = () => {
                 </div>
               </div>
 
+              {/* Change Orders Section */}
+              {changeOrders.length > 0 && (
+                <div className="mb-8">
+                  <h2 className="text-xl font-semibold text-gray-800 mb-4 border-b border-orange-300 pb-2 flex items-center gap-2">
+                    📝 Change Orders
+                    <span className="text-sm font-normal text-gray-600">({changeOrders.length} item{changeOrders.length !== 1 ? 's' : ''})</span>
+                  </h2>
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                    <div className="space-y-4">
+                      {changeOrders.map((changeOrder, index) => (
+                        <div key={changeOrder.id} className="bg-white border border-orange-200 rounded-lg p-4">
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-orange-600 bg-orange-100 px-2 py-1 rounded">
+                                {changeOrder.type === 'task' ? 'Task' : 'Item'}
+                              </span>
+                              <span className="text-sm font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                                {changeOrder.category}
+                              </span>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-sm text-gray-500">
+                                {new Date(changeOrder.timestamp).toLocaleDateString()}
+                              </div>
+                              <div className="font-bold text-orange-600">
+                                ${changeOrder.totalCost?.toFixed(2) || '0.00'}
+                              </div>
+                            </div>
+                          </div>
+                          <h4 className="font-medium text-gray-900 mb-2">{changeOrder.description}</h4>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600">
+                            <div>
+                              <span className="font-medium">Quantity:</span> {changeOrder.quantity} {changeOrder.unit}
+                            </div>
+                            <div>
+                              <span className="font-medium">Unit Price:</span> ${changeOrder.unitPrice?.toFixed(2) || '0.00'}
+                            </div>
+                            <div>
+                              <span className="font-medium">Labor:</span> {changeOrder.laborHours}h @ ${changeOrder.laborRate}/hr
+                            </div>
+                            <div>
+                              <span className="font-medium">Total:</span> ${changeOrder.totalCost?.toFixed(2) || '0.00'}
+                            </div>
+                          </div>
+                          {changeOrder.notes && (
+                            <div className="mt-2 p-2 bg-gray-50 rounded text-sm text-gray-700">
+                              <strong>Notes:</strong> {changeOrder.notes}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-4 pt-4 border-t border-orange-200">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium text-gray-700">Change Orders Subtotal:</span>
+                        <span className="font-bold text-orange-600 text-lg">
+                          ${changeOrders.reduce((sum, co) => sum + (co.totalCost || 0), 0).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Cost Summary */}
               <div className="bg-gray-100 p-6 rounded-lg">
                 <h2 className="text-xl font-semibold text-gray-800 mb-4">Cost Summary</h2>
                 <div className="space-y-2">
                   <div className="flex justify-between">
+                    <span>Rooms/Areas Subtotal:</span>
+                    <span className="font-semibold">
+                      ${rooms.reduce((total, room) => total + parseFloat(calculateRoomCost(room)), 0).toFixed(2)}
+                    </span>
+                  </div>
+                  {changeOrders.length > 0 && (
+                    <div className="flex justify-between">
+                      <span>Change Orders Subtotal:</span>
+                      <span className="font-semibold text-orange-600">
+                        ${changeOrders.reduce((sum, co) => sum + (co.totalCost || 0), 0).toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between border-t border-gray-300 pt-2">
                     <span>Subtotal:</span>
                     <span className="font-semibold">${calculateSubtotal()}</span>
                   </div>
@@ -745,9 +1016,20 @@ const EstimateForm = () => {
               </button>
               <button
                 onClick={handleDownloadPDF}
-                className="bg-red-600 hover:bg-red-500 text-white px-6 py-2 rounded-lg transition-colors duration-200"
+                disabled={isGeneratingPDF}
+                className="bg-red-600 hover:bg-red-500 text-white px-6 py-2 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                📄 Download PDF
+                {isGeneratingPDF ? (
+                  <>
+                    <span className="animate-spin">⏳</span>
+                    <span>Generating...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>📄</span>
+                    <span>Download PDF</span>
+                  </>
+                )}
               </button>
               <button
                 onClick={() => setShowEmailForm(true)}

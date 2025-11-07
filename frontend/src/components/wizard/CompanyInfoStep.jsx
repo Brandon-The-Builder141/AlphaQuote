@@ -72,6 +72,8 @@ const CompanyInfoStep = ({ data, onDataChange, onNext, onBack }) => {
   const handleNext = () => {
     if (formData.companyName && formData.industry) {
       onNext();
+    } else {
+      console.warn('Please fill in required fields: Company Name and Industry');
     }
   };
 

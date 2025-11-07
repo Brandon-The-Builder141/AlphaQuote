@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { showSuccess, showError } from '../utils/toastService';
+import { API_BASE_URL } from '../config/env';
 
 export default function ReceiptConfirm() {
   const navigate = useNavigate();
@@ -110,32 +112,32 @@ export default function ReceiptConfirm() {
 
     // Validate required fields
     if (!editableData.vendor.trim()) {
-      // alert('Please enter a vendor name'); // TODO: Replace with proper error handling
+      showError('Please enter a vendor name');
       return;
     }
 
     if (!editableData.purchaseDate) {
-      // alert('Please select a purchase date'); // TODO: Replace with proper error handling
+      showError('Please select a purchase date');
       return;
     }
 
     if (editableData.items.length === 0) {
-      // alert('Please add at least one item'); // TODO: Replace with proper error handling
+      showError('Please add at least one item');
       return;
     }
 
     // Validate items
     for (const item of editableData.items) {
       if (!item.name.trim()) {
-        // alert('Please enter item names for all items'); // TODO: Replace with proper error handling
+        showError('Please enter item names for all items');
         return;
       }
       if (item.quantity <= 0) {
-        // alert('Please enter valid quantities for all items'); // TODO: Replace with proper error handling
+        showError('Please enter valid quantities for all items');
         return;
       }
       if (item.unitPrice < 0) {
-        // alert('Please enter valid prices for all items'); // TODO: Replace with proper error handling
+        showError('Please enter valid prices for all items');
         return;
       }
     }
@@ -161,7 +163,7 @@ export default function ReceiptConfirm() {
       // console.log('Saving receipt data:', receiptData);
 
       // Call the API
-      const response = await fetch('http://localhost:3001/api/receipts', {
+      const response = await fetch(`${API_BASE_URL}/api/receipts`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -182,13 +184,13 @@ export default function ReceiptConfirm() {
       sessionStorage.removeItem('parsedReceiptData');
 
       // Show success message
-      // alert(`Receipt data saved successfully!\nReceipt ID: ${result.receipt.id}\nVendor: ${result.receipt.vendor}\nTotal: $${result.receipt.total}`); // TODO: Replace with proper error handling
+      showSuccess(`Receipt saved successfully! Total: $${result.receipt.total}`);
 
       // Navigate back to receipts
       navigate('/receipts');
     } catch (error) {
       console.error('Error saving receipt:', error);
-      // alert(`Failed to save receipt data: ${error.message}`); // TODO: Replace with proper error handling
+      showError(`Failed to save receipt: ${error.message}`);
     } finally {
       setSaving(false);
     }

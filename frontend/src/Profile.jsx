@@ -239,7 +239,6 @@ export default function Profile() {
         selectedModules: {
           estimation: true,
           vendorManagement: true,
-          aiAssistant: true,
           reporting: true
         }
       }
@@ -649,8 +648,7 @@ export default function Profile() {
                         <span key={moduleId} className="px-2 py-1 bg-primary/20 text-primary rounded-lg text-xs font-body">
                           {moduleId === 'estimation' ? 'Estimation' :
                             moduleId === 'vendorManagement' ? 'Vendor Management' :
-                              moduleId === 'aiAssistant' ? 'AI Assistant' :
-                                moduleId === 'reporting' ? 'Reporting' : moduleId}
+                              moduleId === 'reporting' ? 'Reporting' : moduleId}
                         </span>
                       ))}
                   </div>

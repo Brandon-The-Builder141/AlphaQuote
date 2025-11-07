@@ -3,7 +3,6 @@ import { motion } from 'framer-motion';
 import {
   Calculator,
   Store,
-  Bot,
   BarChart3,
   ArrowRight,
   ArrowLeft,
@@ -14,7 +13,6 @@ const ModuleSelectionStep = ({ data, onDataChange, onNext, onBack }) => {
   const [selectedModules, setSelectedModules] = useState(data.selectedModules || {
     estimation: true,
     vendorManagement: true,
-    aiAssistant: true,
     reporting: false
   });
 
@@ -38,16 +36,6 @@ const ModuleSelectionStep = ({ data, onDataChange, onNext, onBack }) => {
       bgColor: 'bg-green-500/20',
       borderColor: 'border-green-500/30',
       required: true
-    },
-    {
-      id: 'aiAssistant',
-      name: 'AI Assistant',
-      description: 'Get intelligent recommendations and automated insights for your projects',
-      icon: Bot,
-      color: 'text-purple-400',
-      bgColor: 'bg-purple-500/20',
-      borderColor: 'border-purple-500/30',
-      required: false
     },
     {
       id: 'reporting',

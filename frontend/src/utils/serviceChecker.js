@@ -1,30 +1,19 @@
 /**
  * Service Status Checker for AlphaQuote
- * Checks availability of external services (Ollama AI, Price Scraper)
+ * Checks availability of external services (Price Scraper)
  */
+
+import { API_ENDPOINTS } from '../config/env';
 
 export const checkServiceStatus = async () => {
   const status = {
-    ollama: false,
     scraper: false,
     timestamp: new Date().toISOString()
   };
 
-  // Check Ollama AI Service
-  try {
-    const response = await fetch('http://localhost:11434/api/tags', {
-      method: 'GET',
-      signal: AbortSignal.timeout(5000) // 5 second timeout
-    });
-    status.ollama = response.ok;
-  } catch (error) {
-    console.warn('Ollama service not available:', error.message);
-    status.ollama = false;
-  }
-
   // Check Price Scraper Service
   try {
-    const response = await fetch('http://localhost:5050/health', {
+    const response = await fetch(API_ENDPOINTS.SCRAPER_HEALTH, {
       method: 'GET',
       signal: AbortSignal.timeout(5000) // 5 second timeout
     });
@@ -40,15 +29,6 @@ export const checkServiceStatus = async () => {
 export const getServiceStatusMessage = (status) => {
   const messages = [];
 
-  if (!status.ollama) {
-    messages.push({
-      type: 'warning',
-      service: 'AI Assistant',
-      message: 'Ollama AI service is not running. AI features will use fallback estimates.',
-      solution: 'Start Ollama with: ollama serve'
-    });
-  }
-
   if (!status.scraper) {
     messages.push({
       type: 'warning',
@@ -58,7 +38,7 @@ export const getServiceStatusMessage = (status) => {
     });
   }
 
-  if (status.ollama && status.scraper) {
+  if (status.scraper) {
     messages.push({
       type: 'success',
       service: 'All Services',

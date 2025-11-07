@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { motion } from 'framer-motion';
+import { showSuccess, showError } from '../utils/toastService';
+import { API_BASE_URL } from '../config/env';
+import { receiptEditSchema } from '../schemas';
 import {
   Receipt,
   Plus,
@@ -18,19 +20,6 @@ import {
   FileText,
   ArrowLeft
 } from 'lucide-react';
-
-// Validation schema for receipt editing
-const receiptEditSchema = z.object({
-  vendorName: z.string().min(1, 'Vendor name is required'),
-  purchaseDate: z.string().min(1, 'Purchase date is required'),
-  totalAmount: z.string().min(1, 'Total amount is required').refine(
-    (val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0,
-    'Total amount must be a positive number'
-  ),
-  notes: z.string().optional(),
-  status: z.enum(['parsed', 'manual', 'verified']).default('parsed'),
-  projectId: z.string().optional()
-});
 
 export default function Receipts() {
   const navigate = useNavigate();
@@ -70,7 +59,7 @@ export default function Receipts() {
   const loadReceipts = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:3001/api/receipts');
+      const response = await fetch(`${API_BASE_URL}/api/receipts`);
       if (response.ok) {
         const data = await response.json();
         setReceipts(data.receipts || []);
@@ -88,7 +77,7 @@ export default function Receipts() {
 
   const loadProjects = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/projects');
+      const response = await fetch(`${API_BASE_URL}/api/projects`);
       if (response.ok) {
         const data = await response.json();
         setProjects(data.projects || []);
@@ -174,7 +163,7 @@ export default function Receipts() {
         )
       );
 
-      const response = await fetch(`http://localhost:3001/api/receipts/${editingReceipt.id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/receipts/${editingReceipt.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
@@ -195,10 +184,11 @@ export default function Receipts() {
       }
 
       // console.log('Receipt updated successfully');
+      showSuccess('Receipt updated successfully!');
       handleCloseModal();
     } catch (error) {
       console.error('Error updating receipt:', error);
-      // alert('Failed to update receipt. Please try again.'); // TODO: Replace with proper error handling
+      showError('Failed to update receipt. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -210,20 +200,20 @@ export default function Receipts() {
     }
 
     try {
-      const response = await fetch(`http://localhost:3001/api/receipts/${receiptId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/receipts/${receiptId}`, {
         method: 'DELETE'
       });
 
       if (response.ok) {
         // Remove receipt from list
         setReceipts(prev => prev.filter(receipt => receipt.id !== receiptId));
-        // console.log('Receipt deleted successfully');
+        showSuccess('Receipt deleted successfully!');
       } else {
         throw new Error('Failed to delete receipt');
       }
     } catch (error) {
       console.error('Error deleting receipt:', error);
-      // alert('Failed to delete receipt. Please try again.'); // TODO: Replace with proper error handling
+      showError('Failed to delete receipt. Please try again.');
     }
   };
 

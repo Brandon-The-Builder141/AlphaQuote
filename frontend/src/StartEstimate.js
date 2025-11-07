@@ -6,18 +6,23 @@ import { getEnabledModules } from './utils/moduleVisibility';
 import {
   Calculator,
   FileText,
-  Store,
-  Settings,
   BarChart3,
-  Brain,
   Receipt,
   TrendingUp,
-  Cog
+  Cog,
+  UserPlus,
+  Play,
+  Crown
 } from 'lucide-react';
 
 export default function StartEstimate() {
   const navigate = useNavigate();
   const [enabledModules, setEnabledModules] = useState(getEnabledModules());
+
+  // Check if Clerk is available
+  const hasClerkKey = process.env.REACT_APP_CLERK_PUBLISHABLE_KEY &&
+                     process.env.REACT_APP_CLERK_PUBLISHABLE_KEY !== 'pk_test_placeholder_key_for_development';
+  const isSignedIn = hasClerkKey; // In development without Clerk, assume signed in for demo
 
   useEffect(() => {
     // Update enabled modules when localStorage changes
@@ -118,6 +123,15 @@ export default function StartEstimate() {
 
           <div className="flex items-center gap-4">
             <motion.button
+              onClick={() => window.location.href = 'https://buy.stripe.com/bJe28r4AM09beeq7TI1kA00'}
+              className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 text-white rounded-xl font-semibold shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-all duration-200"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <Crown className="w-4 h-4" />
+              Buy Now
+            </motion.button>
+            <motion.button
               onClick={() => navigate('/setup')}
               className="flex items-center gap-2 px-4 py-2 bg-slate-800/50 hover:bg-slate-700/50 text-slate-300 hover:text-white rounded-xl border border-slate-700/50 hover:border-slate-600/50 transition-all duration-200 font-body"
               whileHover={{ scale: 1.02 }}
@@ -199,27 +213,45 @@ export default function StartEstimate() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.8, delay: 0.7, ease: 'easeOut' }}
                 >
-                  <motion.button
-                    onClick={() => navigate('/estimate')}
-                    className="group relative bg-gradient-to-r from-primary to-primary/80 text-white px-8 py-4 rounded-2xl text-lg font-semibold transition-all duration-300 flex items-center justify-center space-x-3 overflow-hidden"
-                    whileHover={{ scale: 1.05, y: -2 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
-                    <BarChart3 className="w-6 h-6 relative z-10" />
-                    <span className="relative z-10">Start New Estimate</span>
-                  </motion.button>
+                  {isSignedIn ? (
+                    <>
+                      <motion.button
+                        onClick={() => navigate('/estimate')}
+                        className="group relative bg-gradient-to-r from-primary to-primary/80 text-white px-8 py-4 rounded-2xl text-lg font-semibold transition-all duration-300 flex items-center justify-center space-x-3 overflow-hidden"
+                        whileHover={{ scale: 1.05, y: -2 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+                        <BarChart3 className="w-6 h-6 relative z-10" />
+                        <span className="relative z-10">Start New Estimate</span>
+                      </motion.button>
 
-                  <motion.button
-                    onClick={() => navigate('/ai-assist')}
-                    className="group relative bg-gradient-to-r from-accent to-accent/80 text-white px-8 py-4 rounded-2xl text-lg font-semibold transition-all duration-300 flex items-center justify-center space-x-3 overflow-hidden"
-                    whileHover={{ scale: 1.05, y: -2 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
-                    <Brain className="w-6 h-6 relative z-10" />
-                    <span className="relative z-10">AI Assistant</span>
-                  </motion.button>
+                    </>
+                  ) : (
+                    <>
+                      <motion.button
+                        onClick={() => navigate('/sign-up')}
+                        className="group relative bg-gradient-to-r from-primary to-primary/80 text-white px-8 py-4 rounded-2xl text-lg font-semibold transition-all duration-300 flex items-center justify-center space-x-3 overflow-hidden"
+                        whileHover={{ scale: 1.05, y: -2 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+                        <UserPlus className="w-6 h-6 relative z-10" />
+                        <span className="relative z-10">Get Started Free</span>
+                      </motion.button>
+
+                      <motion.button
+                        onClick={() => navigate('/demo')}
+                        className="group relative bg-gradient-to-r from-accent to-accent/80 text-white px-8 py-4 rounded-2xl text-lg font-semibold transition-all duration-300 flex items-center justify-center space-x-3 overflow-hidden"
+                        whileHover={{ scale: 1.05, y: -2 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+                        <Play className="w-6 h-6 relative z-10" />
+                        <span className="relative z-10">Try Demo</span>
+                      </motion.button>
+                    </>
+                  )}
                 </motion.div>
               </motion.div>
             </div>
@@ -282,69 +314,6 @@ export default function StartEstimate() {
         </div>
       </div>
 
-      {/* Secondary Navigation */}
-      <div className="relative bg-slate-950/50 backdrop-blur-sm border-y border-slate-800/50 py-8">
-        <div className="max-w-7xl mx-auto px-8">
-          <motion.div
-            className="flex flex-wrap justify-center gap-8"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 1.0, ease: 'easeOut' }}
-          >
-            {/* Receipt Intelligence - Always available */}
-            <motion.button
-              onClick={() => navigate('/receipts')}
-              className="group flex items-center space-x-3 text-slate-400 hover:text-white transition-colors duration-300"
-              whileHover={{ y: -2 }}
-            >
-              <div className="w-10 h-10 bg-slate-800/50 rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors duration-300">
-                <Receipt className="w-5 h-5" />
-              </div>
-              <span className="font-medium">Receipt Intelligence</span>
-            </motion.button>
-
-            {/* Vendor Management - Only if enabled */}
-            {enabledModules.vendorManagement && (
-              <motion.button
-                onClick={() => navigate('/vendors')}
-                className="group flex items-center space-x-3 text-slate-400 hover:text-white transition-colors duration-300"
-                whileHover={{ y: -2 }}
-              >
-                <div className="w-10 h-10 bg-slate-800/50 rounded-xl flex items-center justify-center group-hover:bg-accent/20 transition-colors duration-300">
-                  <Store className="w-5 h-5" />
-                </div>
-                <span className="font-medium">Vendor Management</span>
-              </motion.button>
-            )}
-
-            {/* AI Assistant - Only if enabled */}
-            {enabledModules.aiAssistant && (
-              <motion.button
-                onClick={() => navigate('/ai-assist')}
-                className="group flex items-center space-x-3 text-slate-400 hover:text-white transition-colors duration-300"
-                whileHover={{ y: -2 }}
-              >
-                <div className="w-10 h-10 bg-slate-800/50 rounded-xl flex items-center justify-center group-hover:bg-purple-500/20 transition-colors duration-300">
-                  <Brain className="w-5 h-5" />
-                </div>
-                <span className="font-medium">AI Assistant</span>
-              </motion.button>
-            )}
-
-            {/* Profile - Always available */}
-            <motion.button
-              onClick={() => navigate('/profile')}
-              className="group flex items-center space-x-3 text-slate-400 hover:text-white transition-colors duration-300"
-              whileHover={{ y: -2 }}
-            >
-              <div className="w-10 h-10 bg-slate-800/50 rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors duration-300">
-                <Settings className="w-5 h-5" />
-              </div>
-              <span className="font-medium">Profile</span>
-            </motion.button>
-          </motion.div>
-        </div>
-      </div>
 
       {/* Premium Features Section */}
       <div className="relative py-24">
@@ -372,18 +341,10 @@ export default function StartEstimate() {
               {
                 icon: BarChart3,
                 title: 'Smart Estimates',
-                description: 'AI-powered material recommendations with real-time pricing from major retailers',
+                description: 'Create detailed estimates with real-time pricing from major retailers',
                 color: 'primary',
                 delay: 0.1,
                 module: 'estimation'
-              },
-              {
-                icon: Brain,
-                title: 'AI Assistant',
-                description: 'Voice-powered AI that generates professional estimates with PDF export',
-                color: 'accent',
-                delay: 0.2,
-                module: 'aiAssistant'
               },
               {
                 icon: FileText,
@@ -431,6 +392,34 @@ export default function StartEstimate() {
               </motion.div>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="relative py-12 border-t border-slate-800/50">
+        <div className="max-w-7xl mx-auto px-8">
+          <motion.div
+            className="flex flex-col md:flex-row items-center justify-between gap-6"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 1.4 }}
+          >
+            <div className="text-center md:text-left">
+              <p className="text-slate-400">
+                Ready to transform your estimation process?
+              </p>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <motion.button
+                onClick={() => window.location.href = 'https://buy.stripe.com/bJe28r4AM09beeq7TI1kA00'}
+                className="text-slate-400 hover:text-primary transition-colors text-sm font-medium"
+                whileHover={{ scale: 1.05 }}
+              >
+                View Pricing
+              </motion.button>
+            </div>
+          </motion.div>
         </div>
       </div>
     </div>

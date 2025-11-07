@@ -26,8 +26,7 @@ export const getMaterialPrice = async (materialName, profile = null) => {
         source: 'manual',
         materialName: customPrice.name,
         vendor: profile.vendorName || 'Custom Vendor',
-        confidence: 'high',
-        timestamp: new Date().toISOString()
+        confidence: 'high'
       };
     }
   }
@@ -48,8 +47,7 @@ export const getMaterialPrice = async (materialName, profile = null) => {
         source: 'receipt',
         materialName,
         vendor: latestPrice.vendor.name,
-        confidence: 'high',
-        timestamp: latestPrice.lastUpdated || latestPrice.createdAt
+        confidence: 'high'
       };
     }
   } catch (error) {
@@ -76,8 +74,7 @@ export const getMaterialPrice = async (materialName, profile = null) => {
     materialName,
     vendor: 'Unknown',
     confidence: 'none',
-    warning: `No pricing data available for "${materialName}". Please add manual pricing or check your vendor setup.`,
-    timestamp: new Date().toISOString()
+    warning: `No pricing data available for "${materialName}". Please add manual pricing or check your vendor setup.`
   };
 };
 
@@ -89,8 +86,9 @@ export const getMaterialPrice = async (materialName, profile = null) => {
  */
 const getScrapedPrice = async (materialName, profile = null) => {
   try {
+    const { SCRAPER_URL } = await import('../config/env');
     const zipCode = profile?.zipCode || '90210';
-    const response = await fetch(`http://localhost:5050/scrape-price?search=${encodeURIComponent(materialName)}&zip=${zipCode}&sites=allStores`);
+    const response = await fetch(`${SCRAPER_URL}/scrape-price?search=${encodeURIComponent(materialName)}&zip=${zipCode}&sites=allStores`);
     const priceData = await response.json();
 
     if (priceData.results && priceData.results.length > 0) {

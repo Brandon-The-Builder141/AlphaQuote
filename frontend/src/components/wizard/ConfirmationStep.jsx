@@ -26,7 +26,6 @@ const ConfirmationStep = ({ onNext, onBack, wizardData }) => {
     const icons = {
       estimation: '📊',
       vendorManagement: '🏪',
-      aiAssistant: '🤖',
       reporting: '📈'
     };
     return icons[moduleId] || '⚙️';
@@ -36,7 +35,6 @@ const ConfirmationStep = ({ onNext, onBack, wizardData }) => {
     const names = {
       estimation: 'Estimation',
       vendorManagement: 'Vendor Management',
-      aiAssistant: 'AI Assistant',
       reporting: 'Reporting & Analytics'
     };
     return names[moduleId] || moduleId;

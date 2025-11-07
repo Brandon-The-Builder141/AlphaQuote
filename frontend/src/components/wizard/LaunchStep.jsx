@@ -7,8 +7,7 @@ import {
   ArrowRight,
   Settings,
   BarChart3,
-  Store,
-  Bot
+  Store
 } from 'lucide-react';
 
 const LaunchStep = ({ wizardData, onFinish }) => {
@@ -55,7 +54,6 @@ const LaunchStep = ({ wizardData, onFinish }) => {
     const icons = {
       estimation: BarChart3,
       vendorManagement: Store,
-      aiAssistant: Bot,
       reporting: Settings
     };
     return icons[moduleId] || Settings;
@@ -65,7 +63,6 @@ const LaunchStep = ({ wizardData, onFinish }) => {
     const names = {
       estimation: 'Estimation',
       vendorManagement: 'Vendor Management',
-      aiAssistant: 'AI Assistant',
       reporting: 'Reporting & Analytics'
     };
     return names[moduleId] || moduleId;

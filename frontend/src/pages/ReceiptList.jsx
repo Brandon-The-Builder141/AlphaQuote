@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../config/env';
 
 export default function ReceiptList() {
   const navigate = useNavigate();
@@ -14,7 +15,7 @@ export default function ReceiptList() {
   const fetchReceipts = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:3001/api/receipts');
+      const response = await fetch(`${API_BASE_URL}/api/receipts`);
 
       if (!response.ok) {
         throw new Error(`Failed to fetch receipts: ${response.statusText}`);

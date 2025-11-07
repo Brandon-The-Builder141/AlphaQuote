@@ -14,7 +14,6 @@ export const getEnabledModules = () => {
   return {
     estimation: true,
     vendorManagement: true,
-    aiAssistant: true,
     reporting: false
   };
 };
@@ -28,7 +27,6 @@ export const getModuleDisplayName = (moduleId) => {
   const names = {
     estimation: 'Estimation',
     vendorManagement: 'Vendor Management',
-    aiAssistant: 'AI Assistant',
     reporting: 'Reporting & Analytics'
   };
   return names[moduleId] || moduleId;
@@ -38,7 +36,6 @@ export const getModuleIcon = (moduleId) => {
   const icons = {
     estimation: '📊',
     vendorManagement: '🏪',
-    aiAssistant: '🤖',
     reporting: '📈'
   };
   return icons[moduleId] || '⚙️';

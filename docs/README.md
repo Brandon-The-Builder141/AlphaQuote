@@ -1,277 +1,376 @@
-# 🧮 AlphaQuote - Professional Construction Estimation Software
+# 🏗️ AlphaQuote
 
-**Estimate smarter. Lead the pack.**
+> **AI-Powered Construction Estimation Platform**
 
-AlphaQuote is a comprehensive, business-ready construction estimation software designed for contractors, remodelers, and construction professionals. Featuring AI-powered estimates, real-time material pricing, receipt-based pricing intelligence, OCR receipt processing, and professional PDF generation.
-
-![AlphaQuote Features](https://img.shields.io/badge/Features-Complete-brightgreen) ![Database](https://img.shields.io/badge/Database-Prisma%20SQLite-blue) ![AI](https://img.shields.io/badge/AI-Ollama%20GPT--OSS-orange) ![Pricing](https://img.shields.io/badge/Pricing-SerpAPI-yellow) ![OCR](https://img.shields.io/badge/OCR-Tesseract.js-green)
-
-## 🚀 Quick Start
-
-### One-Command Startup
-```bash
-npm install
-npm run db:seed
-npm start
-```
-
-### Full Service Startup (Recommended)
-```bash
-# Terminal 1: Start React application
-npm start
-
-# Terminal 2: Start API server
-npm run api
-
-# Terminal 3: Start price scraper
-npm run scraper
-
-# Terminal 4: Start AI service
-ollama serve
-
-# Terminal 5: View database (optional)
-npx prisma studio
-```
-
-### Service URLs
-- **Main App**: http://localhost:3000
-- **API Server**: http://localhost:3001
-- **Price Scraper**: http://localhost:5050
-- **AI Service**: http://localhost:11434
-- **Database Studio**: http://localhost:5555
-
-## 🎯 Core Features
-
-### ✅ **Professional Estimation**
-- **100% Client-Fillable Forms** - No restrictive dropdowns
-- **Multi-Room Project Support** - Handle complex estimates
-- **Real-Time Calculations** - Live cost updates as you type
-- **Professional PDF Generation** - Branded, client-ready documents
-- **Business Profile Management** - Company branding and settings
-
-### 🤖 **AI-Powered Intelligence**
-- **Voice Input Support** - Natural speech recognition
-- **AI-Generated Estimates** - Using gpt-oss:latest model
-- **Streaming Responses** - Real-time AI estimate generation
-- **AI PDF Export** - Convert AI estimates to professional PDFs
-- **Context Learning** - Remembers past projects for better estimates
-
-### 💰 **Advanced Pricing Intelligence**
-- **SerpAPI Integration** - Real-time pricing from Google Shopping
-- **Receipt Upload System** - Build local pricing database with OCR
-- **Vendor Price Analytics** - Compare suppliers and track trends
-- **Smart Price Suggestions** - AI-powered pricing recommendations
-- **Multi-Store Comparison** - Home Depot, Lowe's, Menards, etc.
-
-### 🧾 **Receipt Management System**
-- **OCR Processing** - Tesseract.js powered text extraction
-- **Smart Parsing** - Automatic vendor, date, and item extraction
-- **Receipt Browsing** - Search, filter, and manage all receipts
-- **Project Assignment** - Link receipts to specific projects
-- **Vendor Intelligence** - Build pricing database from receipts
-
-### 🗄️ **Professional Database**
-- **Prisma ORM** - Type-safe database operations
-- **SQLite Database** - Local, fast, reliable storage
-- **Receipt Intelligence** - OCR processing and price extraction
-- **Vendor Management** - Track supplier relationships
-- **Project Tracking** - Complete workflow management
-
-## 📊 Business Benefits
-
-### **Time Savings**
-- **90% faster estimates** compared to manual methods
-- **Automated calculations** prevent costly errors
-- **Voice input** eliminates typing
-- **Template reuse** for similar projects
-
-### **Competitive Advantage**
-- **Real-time pricing** ensures accuracy
-- **Local pricing intelligence** from receipts
-- **AI insights** improve estimate quality
-- **Professional presentation** wins more bids
-
-### **Client Experience**
-- **Transparent pricing** builds trust
-- **Professional documents** enhance credibility
-- **Quick turnaround** speeds project starts
-- **Mobile-responsive** works on any device
-
-## 🛠 Installation & Setup
-
-### Prerequisites
-- **Node.js** (v14 or higher)
-- **NPM** (comes with Node.js)
-- **Ollama** (optional, for AI features)
-
-### Installation Steps
-```bash
-# 1. Clone or download AlphaQuote
-git clone [repository-url]
-cd AlphaQuote
-
-# 2. Install dependencies
-npm install
-
-# 3. Setup database
-npx prisma migrate dev
-npm run db:seed
-
-# 4. Start application
-npm start
-```
-
-### Optional: AI & Pricing Setup
-```bash
-# Install Ollama AI
-# Windows: Download from https://ollama.ai/download/windows
-# Mac: Download from https://ollama.ai/download/mac
-# Linux: curl https://ollama.ai/install.sh | sh
-
-# Install AI model
-ollama pull gpt-oss:latest
-
-# Get SerpAPI key (free tier available)
-# Visit: https://serpapi.com/
-# Set in server/scraper.js or environment variable
-```
-
-## 📋 Available Scripts
-
-### Development
-```bash
-npm start           # Start React application (port 3000)
-npm run api         # Start Express API server (port 3001)
-npm run scraper     # Start price scraper service (port 5050)
-npm run verify      # Check all service status
-npm run dev         # Start app and scraper together
-```
-
-### Database Management
-```bash
-npm run db:seed     # Load demo data
-npm run db:reset    # Reset and reseed database
-npx prisma studio   # Visual database editor
-npx prisma migrate dev --name [name]  # Create migration
-```
-
-### Production
-```bash
-npm run build       # Build for production
-npm run production  # Serve production build
-```
-
-## 🎯 Service Architecture
-
-### Core Services
-1. **React Frontend** (Port 3000): Main user interface
-2. **Express API Server** (Port 3001): Backend API with CRUD operations
-3. **Price Scraper** (Port 5050): SerpAPI integration for real-time pricing
-4. **Ollama AI** (Port 11434): Local AI processing for estimates
-5. **Prisma Studio** (Port 5555): Database management interface
-
-### Database Schema
-- **LocalVendor**: Supplier information and statistics
-- **LocalVendorPrice**: Material pricing from receipts
-- **Receipt**: Uploaded receipt data with OCR processing and project assignment
-- **ReceiptItem**: Individual line items from parsed receipts
-- **Task**: Project tasks with vendor associations
-- **Project**: Client projects and estimates with receipt tracking
-
-## 🎨 Demo & Testing
-
-### Quick Demo
-1. **Load Business Profile**: Setup → "🏢 Load Demo Business Profile"
-2. **Load Estimate Data**: Estimate → "📝 Load Demo Data"
-3. **Test AI Assistant**: AI → "📝 Load Demo AI Estimate"
-4. **Test Receipt Upload**: Receipts → "New Receipt" → Upload receipt image
-5. **Test Receipt Management**: Browse, edit, and assign receipts to projects
-6. **Generate PDFs**: Professional documents from all features
-
-### Sample Data Included
-- **Complete kitchen & bathroom renovation** ($19,316.60)
-- **Multiple vendor receipts** with OCR processing
-- **AI estimate examples** with professional formatting
-- **Business profile** with branding and settings
-- **Project examples** with receipt assignments
-
-## 🔧 Configuration
-
-### Business Setup
-- **Company Information**: Name, logo, contact details
-- **Default Settings**: Markup percentages, labor rates
-- **Service Area**: ZIP code for local pricing
-- **Vendor Preferences**: Preferred suppliers
-
-### API Configuration
-- **SerpAPI**: Real-time pricing (100 free searches/month)
-- **Ollama AI**: Local AI processing (free)
-- **Prisma**: Database management (local SQLite)
-
-## 🚨 Troubleshooting
-
-### Common Issues
-```bash
-# Services won't start
-npm run verify
-
-# Database issues
-npm run db:reset
-
-# AI not working
-ollama serve
-ollama pull gpt-oss:latest
-
-# Price scraping issues
-# Check SerpAPI key in server/scraper.js
-```
-
-### Service URLs
-- **Main App**: http://localhost:3000
-- **API Server**: http://localhost:3001
-- **Price Scraper Health**: http://localhost:5050/health
-- **Database Studio**: http://localhost:5555
-- **AI Service**: http://localhost:11434
-
-## 💼 Business Value
-
-### ROI Analysis
-- **Setup Cost**: $0 (free tier available for all services)
-- **Monthly Cost**: $0-50 (based on SerpAPI usage)
-- **Time Savings**: 2-3 hours per estimate
-- **Accuracy Improvement**: 95%+ vs manual methods
-- **Break-Even**: 1-2 projects per month
-
-### Competitive Advantages
-- **Real local pricing** from receipt intelligence
-- **AI-powered efficiency** with professional output
-- **Multi-source pricing** (web scraping + receipts + AI)
-- **Professional presentation** enhances business image
-
-## 📞 Support & Development
-
-### Key Files
-- `src/EstimateForm.js`: Main estimation logic
-- `src/AlphaBot.jsx`: AI assistant with voice input
-- `src/pages/ReceiptNew.jsx`: Receipt upload with OCR processing
-- `src/pages/Receipts.jsx`: Receipt management and browsing
-- `src/utils/receiptParserEnhanced.js`: Advanced receipt parsing
-- `server/api.js`: Express API server with CRUD operations
-- `server/scraper.js`: SerpAPI price scraping
-- `prisma/schema.prisma`: Database schema
-
-### Contributing
-This is a complete, production-ready solution. For customization:
-1. Fork the repository
-2. Make your changes
-3. Test thoroughly
-4. Document modifications
+AlphaQuote is a modern, intelligent estimation tool designed specifically for contractors and construction professionals. Built with React and powered by AI, it streamlines the quoting process and helps you win more projects with accurate, professional estimates.
 
 ---
 
-**AlphaQuote** - Professional Construction Estimation Software  
-*Estimate smarter. Lead the pack.*
+## 📋 Table of Contents
 
-🔗 **Features**: AI Estimation | OCR Receipt Processing | Real-Time Pricing | Project Management | Professional PDFs  
-🎯 **Target**: Contractors, Remodelers, Construction Professionals  
-🚀 **Status**: Production Ready
+- [Features](#-features)
+- [Screenshots](#-screenshots)
+- [Installation](#-installation)
+- [Usage](#-usage)
+- [Project Structure](#-project-structure)
+- [Technology Stack](#-technology-stack)
+- [API Keys & Environment Setup](#-api-keys--environment-setup)
+- [Development](#-development)
+- [Contributing](#-contributing)
+- [License](#-license)
+
+---
+
+## ✨ Features
+
+### 🚀 **Core Functionality**
+- **⚡ Fast Quote Generation** - Generate professional estimates in minutes, not hours
+- **🏢 Company Profiles** - Maintain detailed business profiles with custom branding
+- **📊 Smart Pricing** - AI-powered material and labor cost suggestions
+- **📱 Modern UI** - Sleek, responsive interface that works on all devices
+- **📄 PDF Export** - Professional quote documents ready for clients
+
+### 🤖 **AI-Powered Features** *(Coming Soon)*
+- **📸 Image Processing** - Upload photos and automatically extract measurements
+- **📋 Form Recognition** - AI-powered receipt and document parsing
+- **🎯 Smart Recommendations** - Intelligent suggestions based on project history
+- **📈 Market Analysis** - Real-time pricing data and trend analysis
+
+### 📦 **Modules**
+- **Estimation Engine** - Core quoting functionality
+- **Vendor Management** - Track suppliers and pricing
+- **Receipt Processing** - OCR-powered receipt management
+- **AI Assistant** - Intelligent project guidance
+
+---
+
+## 📸 Screenshots
+
+> *Screenshots and demo GIFs will be added here*
+
+### Dashboard
+![Dashboard Preview](./docs/screenshots/dashboard.png)
+*Main dashboard with project overview and quick actions*
+
+### Quote Generation
+![Quote Generator](./docs/screenshots/quote-generator.png)
+*Intuitive quote creation with real-time calculations*
+
+### Company Profile
+![Company Profile](./docs/screenshots/company-profile.png)
+*Professional company setup with custom branding*
+
+---
+
+## 🚀 Installation
+
+### Prerequisites
+- **Node.js** (v16 or higher)
+- **npm** or **yarn**
+- **Git**
+
+### Quick Start
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/alphaquote.git
+   cd alphaquote
+   ```
+
+2. **Install dependencies**
+   ```bash
+   # Install frontend dependencies
+   cd frontend
+   npm install
+   
+   # Install backend dependencies (if applicable)
+   cd ../backend
+   npm install
+   ```
+
+3. **Set up environment variables**
+   ```bash
+   # Copy environment template
+   cp .env.example .env
+   
+   # Edit .env with your configuration
+   nano .env
+   ```
+
+4. **Initialize the database**
+   ```bash
+   cd backend
+   npm run db:seed
+   ```
+
+5. **Start the development server**
+   ```bash
+   # Start all services
+   npm run dev
+   
+   # Or start individually
+   npm start          # Frontend (port 3000)
+   npm run api        # Backend API (port 3001)
+   npm run scraper    # Price scraper service
+   ```
+
+---
+
+## 💻 Usage
+
+### Generate a Quote
+```bash
+# Start the application
+npm run start
+
+# Navigate to http://localhost:3000
+# Click "Start New Estimate"
+# Fill in project details
+# Generate professional PDF quote
+```
+
+### Company Setup
+```bash
+# Run the setup wizard
+npm run setup
+
+# Configure your company profile
+# Set up vendor relationships
+# Customize branding and templates
+```
+
+### Receipt Processing
+```bash
+# Upload receipt images
+# AI automatically extracts data
+# Review and confirm details
+# Add to project tracking
+```
+
+---
+
+## 🏗️ Project Structure
+
+```
+alphaquote/
+├── 📁 frontend/           # React application
+│   ├── 📁 src/
+│   │   ├── 📁 components/ # Reusable UI components
+│   │   ├── 📁 pages/      # Application pages
+│   │   ├── 📁 services/   # API and business logic
+│   │   └── 📁 utils/      # Helper functions
+│   ├── 📁 public/         # Static assets
+│   └── 📄 package.json    # Frontend dependencies
+├── 📁 backend/            # Node.js API server
+│   ├── 📁 server/         # API routes and services
+│   ├── 📁 prisma/         # Database schema and migrations
+│   └── 📄 package.json    # Backend dependencies
+├── 📁 ai-models/          # AI and ML components
+│   ├── 📁 core/           # Core AI functionality
+│   └── 📄 AlphaBot.jsx    # AI assistant component
+├── 📁 docs/               # Documentation
+└── 📄 README.md           # This file
+```
+
+---
+
+## 🛠️ Technology Stack
+
+### Frontend
+- **⚛️ React 18** - Modern UI framework
+- **🎨 Tailwind CSS** - Utility-first styling
+- **🎭 Framer Motion** - Smooth animations
+- **🔄 React Router** - Client-side routing
+- **📝 React Hook Form** - Form management
+- **✅ Zod** - Schema validation
+
+### Backend
+- **🚀 Node.js** - JavaScript runtime
+- **⚡ Express.js** - Web framework
+- **🗄️ Prisma** - Database ORM
+- **📧 Nodemailer** - Email service
+- **🔍 Tesseract.js** - OCR processing
+
+### AI & ML
+- **🤖 Mistral/LLaMA** - Local language models
+- **👁️ Computer Vision** - Image processing
+- **📊 Data Analytics** - Pricing intelligence
+
+### Tools & Services
+- **📦 npm** - Package management
+- **🔧 ESLint** - Code linting
+- **💾 SQLite** - Development database
+- **📄 jsPDF** - PDF generation
+
+---
+
+## 🔑 API Keys & Environment Setup
+
+### Required Environment Variables
+
+Create a `.env` file in the project root:
+
+```env
+# Database
+DATABASE_URL="file:./dev.db"
+
+# Email Configuration
+SMTP_HOST="smtp.gmail.com"
+SMTP_PORT=587
+SMTP_USER="your-email@gmail.com"
+SMTP_PASS="your-app-password"
+
+# API Keys (Optional)
+SERPAPI_KEY="REMOVED_APPLICATION_SECRET"
+OPENAI_API_KEY="your-openai-key"
+
+# Application Settings
+NODE_ENV="development"
+PORT=3001
+FRONTEND_URL="http://localhost:3000"
+```
+
+### Setting Up API Keys
+
+1. **SerpAPI** (for price scraping)
+   - Visit [SerpAPI](https://serpapi.com/)
+   - Create account and get API key
+   - Add to `.env` file
+
+2. **Email Service** (for sending quotes)
+   - Configure SMTP settings
+   - Use app-specific passwords for Gmail
+
+---
+
+## 🧪 Development
+
+### Available Scripts
+
+```bash
+# Frontend Development
+npm start              # Start development server
+npm run build          # Build for production
+npm run test           # Run tests
+npm run lint           # Lint code
+npm run lint:fix       # Fix linting issues
+
+# Backend Development
+npm run api            # Start API server
+npm run scraper        # Start price scraper
+npm run db:seed        # Seed database
+npm run db:reset       # Reset database
+
+# Full Stack
+npm run dev            # Start all services
+npm run production     # Production build and serve
+```
+
+### Code Quality
+
+```bash
+# Run ESLint
+npm run lint
+
+# Fix auto-fixable issues
+npm run lint:fix
+
+# Type checking (if using TypeScript)
+npm run type-check
+
+# Testing
+npm test
+npm run test:coverage
+```
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions to AlphaQuote! Here's how you can help:
+
+### 🐛 Bug Reports
+1. Check existing issues first
+2. Create detailed bug report with:
+   - Steps to reproduce
+   - Expected vs actual behavior
+   - Screenshots/videos
+   - Environment details
+
+### 💡 Feature Requests
+1. Open an issue with `enhancement` label
+2. Describe the feature and use case
+3. Consider implementation approach
+4. Wait for community feedback
+
+### 🔧 Pull Requests
+1. **Fork the repository**
+2. **Create feature branch**
+   ```bash
+   git checkout -b feature/amazing-feature
+   ```
+3. **Make your changes**
+   - Follow existing code style
+   - Add tests for new functionality
+   - Update documentation
+4. **Commit changes**
+   ```bash
+   git commit -m "Add amazing feature"
+   ```
+5. **Push to branch**
+   ```bash
+   git push origin feature/amazing-feature
+   ```
+6. **Open Pull Request**
+
+### 📋 Development Guidelines
+
+- **Code Style**: Follow ESLint configuration
+- **Commits**: Use conventional commit messages
+- **Testing**: Write tests for new features
+- **Documentation**: Update README for user-facing changes
+- **Performance**: Consider bundle size and runtime performance
+
+### 🏷️ Issue Labels
+
+- `bug` - Something isn't working
+- `enhancement` - New feature or request
+- `documentation` - Improvements to documentation
+- `good first issue` - Good for newcomers
+- `help wanted` - Extra attention is needed
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🙏 Acknowledgments
+
+- **React Team** - For the amazing framework
+- **Tailwind CSS** - For the utility-first approach
+- **Prisma** - For the excellent database toolkit
+- **Community Contributors** - For all the feedback and contributions
+
+---
+
+## 📞 Support
+
+- **📧 Email**: support@alphaquote.com
+- **💬 Discord**: [Join our community](https://discord.gg/alphaquote)
+- **🐦 Twitter**: [@AlphaQuoteApp](https://twitter.com/AlphaQuoteApp)
+- **📖 Documentation**: [docs.alphaquote.com](https://docs.alphaquote.com)
+
+---
+
+<div align="center">
+
+**⭐ Star this repository if you found it helpful!**
+
+Made with ❤️ for the construction industry
+
+[🏠 Homepage](https://alphaquote.com) • [📖 Documentation](https://docs.alphaquote.com) • [🐛 Report Bug](https://github.com/yourusername/alphaquote/issues)
+
+</div>

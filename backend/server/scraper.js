@@ -8,13 +8,26 @@ const cors = require("cors");
 const fetch = globalThis.fetch || require('node-fetch');
 
 // SerpAPI configuration
-const SERPAPI_KEY = process.env.SERPAPI_KEY || 'c17781071d436fa603f949c75145ca77ccbe449f38d5c3cabd586f7ee09af5af';
+// Get your free API key from: https://serpapi.com
+const SERPAPI_KEY = process.env.SERPAPI_KEY || '';
 const SERPAPI_BASE_URL = 'https://serpapi.com/search.json';
 
+// Check if SerpAPI is configured
+const isSerpApiEnabled = () => {
+  return !!SERPAPI_KEY && SERPAPI_KEY.length > 0;
+};
+
 const app = express();
-const PORT = 5050;
+const PORT = process.env.SCRAPER_PORT || 5050;
 
 app.use(cors());
+
+// Log startup configuration
+if (process.env.DEBUG === 'true') {
+  console.log('Scraper Service Configuration:');
+  console.log(`  Port: ${PORT}`);
+  console.log(`  SerpAPI: ${isSerpApiEnabled() ? 'Enabled' : 'Disabled (using fallback prices)'}`);
+}
 
 // SerpAPI Shopping Search Functions
 const serpApiSearch = async (query, location = "United States") => {

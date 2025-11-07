@@ -1,20 +1,70 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config/env';
 
-export default function PricingAssistant({ materialName, onPriceSelect }) {
+export default function PricingAssistant({ materialName, onPriceSelect, selectedRegion }) {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  // Fetch regional pricing suggestions when material name changes
+  useEffect(() => {
+    if (materialName && materialName.length >= 3 && selectedRegion) {
+      fetchRegionalSuggestions();
+    }
+  }, [materialName, selectedRegion]);
+
+  const fetchRegionalSuggestions = async () => {
+    if (!selectedRegion) return;
+
+    setLoading(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/regional-materials/suggestions?region=${selectedRegion}&materialName=${encodeURIComponent(materialName)}`
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.length > 0) {
+          setSuggestions({
+            regional: data,
+            source: 'regional'
+          });
+          setShowSuggestions(true);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch regional suggestions:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleGetSuggestions = () => {
     if (!materialName || materialName.length < 3) {
-      // alert('Please enter a material name first'); // TODO: Replace with proper error handling
       return;
     }
 
-    setLoading(true);
+    if (selectedRegion) {
+      fetchRegionalSuggestions();
+    } else {
+      // Fallback to demo data if no region selected
+      setLoading(true);
+      setTimeout(() => {
+        // Demo pricing intelligence (existing logic)
+        const demoIntelligence = getDemoIntelligence();
+        const materialKey = materialName.toLowerCase().trim();
 
-    // Demo pricing intelligence
-    const demoIntelligence = {
+        if (demoIntelligence[materialKey]) {
+          setSuggestions(demoIntelligence[materialKey]);
+          setShowSuggestions(true);
+        }
+        setLoading(false);
+      }, 500);
+    }
+  };
+
+  const getDemoIntelligence = () => {
+    return {
       'luxury vinyl plank': {
         average: 4.25,
         min: 3.89,
@@ -65,8 +115,9 @@ export default function PricingAssistant({ materialName, onPriceSelect }) {
     // Find matching intelligence
     const materialKey = materialName.toLowerCase();
     let matchedData = null;
+    const intelligence = getDemoIntelligence();
 
-    for (const [key, data] of Object.entries(demoIntelligence)) {
+    for (const [key, data] of Object.entries(intelligence)) {
       if (materialKey.includes(key) || key.includes(materialKey)) {
         matchedData = data;
         break;
@@ -139,6 +190,37 @@ export default function PricingAssistant({ materialName, onPriceSelect }) {
             >
               Upload Receipts →
             </button>
+          </div>
+        ) : suggestions.source === 'regional' ? (
+          // Regional pricing suggestions
+          <div className="space-y-3">
+            <div className="bg-green-600 rounded-lg p-3">
+              <div className="flex items-center space-x-2 mb-2">
+                <span className="text-green-100 text-xs font-medium">🌍 Regional Pricing</span>
+                <span className="text-green-200 text-xs">
+                  {suggestions.regional[0]?.pricePack?.name || selectedRegion}
+                </span>
+              </div>
+              <div className="space-y-2">
+                {suggestions.regional.slice(0, 3).map((material, index) => (
+                  <div key={index} className="flex justify-between items-center bg-green-700 rounded px-3 py-2">
+                    <div>
+                      <p className="text-sm font-medium text-white">{material.materialName}</p>
+                      <p className="text-xs text-green-200">{material.category} • {material.unitLabel}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-lg font-bold text-white">${material.unitPrice.toFixed(2)}</p>
+                      <button
+                        onClick={() => handleSelectPrice(material.unitPrice.toFixed(2))}
+                        className="bg-white text-green-600 hover:bg-green-100 px-2 py-1 rounded text-xs font-medium transition-colors"
+                      >
+                        Use
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         ) : (
           <div className="space-y-3">

@@ -73,9 +73,7 @@ const SetupWizard = ({ onComplete, onSkip, initialData = null }) => {
   };
 
   const handleSkip = () => {
-    if (window.confirm('Are you sure you want to skip the setup wizard? You can always run it later from settings.')) {
-      onSkip();
-    }
+    onSkip();
   };
 
   const handleFinish = () => {

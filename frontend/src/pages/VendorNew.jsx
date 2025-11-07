@@ -2,16 +2,11 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Plus, Building2, User, FileText } from 'lucide-react';
-
-// Validation schema
-const vendorSchema = z.object({
-  name: z.string().min(1, 'Vendor name is required'),
-  contactInfo: z.string().optional(),
-  notes: z.string().optional()
-});
+import { ArrowLeft, Plus, Building2, User, FileText, Globe } from 'lucide-react';
+import { showSuccess, showError } from '../utils/toastService';
+import { API_BASE_URL } from '../config/env';
+import { vendorSchema } from '../schemas';
 
 export default function VendorNew() {
   const navigate = useNavigate();
@@ -24,13 +19,14 @@ export default function VendorNew() {
     defaultValues: {
       name: '',
       contactInfo: '',
+      websiteUrl: '',
       notes: ''
     }
   });
 
   const onSubmit = async (data) => {
     try {
-      const response = await fetch('http://localhost:3001/api/vendors', {
+      const response = await fetch(`${API_BASE_URL}/api/vendors`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -46,11 +42,13 @@ export default function VendorNew() {
       const result = await response.json();
       // console.log('✅ Vendor created:', result);
 
+      showSuccess('Vendor created successfully!');
+
       // Redirect to vendors page
       navigate('/vendors');
     } catch (error) {
       console.error('❌ Error creating vendor:', error);
-      // alert(`Failed to create vendor: ${error.message}`); // TODO: Replace with proper error handling
+      showError(`Failed to create vendor: ${error.message}`);
     }
   };
 
@@ -162,6 +160,29 @@ export default function VendorNew() {
               />
               <p className="mt-1 text-sm text-slate-500 font-body">
                 Optional: Phone, email, or contact person name
+              </p>
+            </div>
+
+            {/* Website URL */}
+            <div>
+              <label htmlFor="websiteUrl" className="block text-sm font-medium text-slate-300 font-body mb-2 flex items-center gap-2">
+                <Globe className="w-4 h-4 text-primary" />
+                Website URL
+              </label>
+              <input
+                {...register('websiteUrl')}
+                type="url"
+                id="websiteUrl"
+                placeholder="https://www.example.com"
+                className={`w-full bg-slate-800/50 border rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200 font-body ${
+                  errors.websiteUrl ? 'border-red-500' : 'border-slate-700/50'
+                }`}
+              />
+              {errors.websiteUrl && (
+                <p className="mt-1 text-sm text-red-400 font-body">{errors.websiteUrl.message}</p>
+              )}
+              <p className="mt-1 text-sm text-slate-500 font-body">
+                Optional: Vendor's website for quick access and cart imports
               </p>
             </div>
 

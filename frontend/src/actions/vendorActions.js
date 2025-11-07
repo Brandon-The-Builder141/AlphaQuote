@@ -1,11 +1,9 @@
 /**
  * Vendor Actions - Server-side operations for vendor management
- * Adapted for React app with API endpoints
+ * Adapted for React app with API endpoints and offline support
  */
 
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import offlineWrapper from '../services/offlineWrapper';
 
 /**
  * Create a new vendor
@@ -14,16 +12,7 @@ const prisma = new PrismaClient();
  */
 export const createVendor = async (vendorData) => {
   try {
-    const vendor = await prisma.localVendor.create({
-      data: {
-        name: vendorData.name,
-        contact: vendorData.contactInfo || null,
-        notes: vendorData.notes || null
-      }
-    });
-
-    // console.log('✅ Vendor created:', vendor);
-    return { success: true, vendor };
+    return await offlineWrapper.createVendor(vendorData);
   } catch (error) {
     console.error('❌ Error creating vendor:', error);
     return { success: false, error: error.message };
@@ -36,15 +25,7 @@ export const createVendor = async (vendorData) => {
  */
 export const getVendors = async () => {
   try {
-    const vendors = await prisma.localVendor.findMany({
-      orderBy: { name: 'asc' },
-      include: {
-        prices: true,
-        receipts: true
-      }
-    });
-
-    return { success: true, vendors };
+    return await offlineWrapper.getVendors();
   } catch (error) {
     console.error('❌ Error fetching vendors:', error);
     return { success: false, error: error.message };
@@ -59,17 +40,7 @@ export const getVendors = async () => {
  */
 export const updateVendor = async (vendorId, updateData) => {
   try {
-    const vendor = await prisma.localVendor.update({
-      where: { id: vendorId },
-      data: {
-        name: updateData.name,
-        contact: updateData.contactInfo || null,
-        notes: updateData.notes || null
-      }
-    });
-
-    // console.log('✅ Vendor updated:', vendor);
-    return { success: true, vendor };
+    return await offlineWrapper.updateVendor(vendorId, updateData);
   } catch (error) {
     console.error('❌ Error updating vendor:', error);
     return { success: false, error: error.message };
@@ -83,12 +54,7 @@ export const updateVendor = async (vendorId, updateData) => {
  */
 export const deleteVendor = async (vendorId) => {
   try {
-    await prisma.localVendor.delete({
-      where: { id: vendorId }
-    });
-
-    // console.log('✅ Vendor deleted:', vendorId);
-    return { success: true };
+    return await offlineWrapper.deleteVendor(vendorId);
   } catch (error) {
     console.error('❌ Error deleting vendor:', error);
     return { success: false, error: error.message };

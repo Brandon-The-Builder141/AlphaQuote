@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { createWorker } from 'tesseract.js';
 import { parseReceiptText } from '../utils/receiptParserEnhanced';
 import { motion } from 'framer-motion';
+import { showSuccess, showError } from '../utils/toastService';
+import { API_BASE_URL } from '../config/env';
+import { receiptSchema } from '../schemas';
 import {
   ArrowLeft,
   Upload,
@@ -14,18 +16,6 @@ import {
   RotateCcw,
   Sparkles
 } from 'lucide-react';
-
-// Validation schema
-const receiptSchema = z.object({
-  vendorName: z.string().min(1, 'Vendor name is required'),
-  purchaseDate: z.string().min(1, 'Purchase date is required'),
-  totalAmount: z.string().min(1, 'Total amount is required').refine(
-    (val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0,
-    'Total amount must be a positive number'
-  ),
-  notes: z.string().optional(),
-  receiptFile: z.any().optional()
-});
 
 export default function ReceiptNew() {
   const navigate = useNavigate();
@@ -66,7 +56,7 @@ export default function ReceiptNew() {
 
   const loadVendors = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/vendors');
+      const response = await fetch(`${API_BASE_URL}/api/vendors`);
       if (response.ok) {
         const data = await response.json();
         setVendors(data.vendors || []);
@@ -162,9 +152,10 @@ export default function ReceiptNew() {
 
       setParsedData(parsed);
       setShowParsedFields(true);
+      showSuccess('Receipt parsed successfully!');
     } catch (error) {
       console.error('Error parsing receipt:', error);
-      // alert('Error parsing receipt. Please try again or enter data manually.'); // TODO: Replace with proper error handling
+      showError('Error parsing receipt. Please try again or enter data manually.');
     } finally {
       setUploading(false);
     }
@@ -186,7 +177,7 @@ export default function ReceiptNew() {
       };
 
       // Save to backend
-      const response = await fetch('http://localhost:3001/api/receipts', {
+      const response = await fetch(`${API_BASE_URL}/api/receipts`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -201,11 +192,13 @@ export default function ReceiptNew() {
       const result = await response.json();
       // console.log('Receipt saved:', result);
 
+      showSuccess('Receipt saved successfully!');
+
       // Navigate to receipt list
       navigate('/receipts');
     } catch (error) {
       console.error('Error saving receipt:', error);
-      // alert('Failed to save receipt. Please try again.'); // TODO: Replace with proper error handling
+      showError('Failed to save receipt. Please try again.');
     } finally {
       setLoading(false);
     }
