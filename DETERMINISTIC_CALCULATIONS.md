@@ -293,6 +293,3 @@ The quote calculation system is now fully deterministic. Same inputs will always
 **Developer:** AlphaQuote Team
 **Tested:** ✅ Passed all determinism tests
 
-
-
-

@@ -11,15 +11,14 @@ Start-Sleep -Seconds 2
 Write-Host "`n2. Setting environment variables..." -ForegroundColor Yellow
 $env:REACT_APP_CLERK_PUBLISHABLE_KEY = "YOUR_CLERK_PUBLISHABLE_KEY"
 $env:REACT_APP_API_URL = "http://localhost:3001"
-$env:CLERK_SECRET_KEY = "YOUR_CLERK_SECRET_KEY"
-
+if (-not $env:CLERK_SECRET_KEY) { throw "Set CLERK_SECRET_KEY before starting AlphaQuote." }
 Write-Host "✅ REACT_APP_CLERK_PUBLISHABLE_KEY: $env:REACT_APP_CLERK_PUBLISHABLE_KEY"
 Write-Host "✅ REACT_APP_API_URL: $env:REACT_APP_API_URL"
 Write-Host "✅ CLERK_SECRET_KEY: [SET]"
 
 # Start backend
 Write-Host "`n3. Starting backend server..." -ForegroundColor Yellow
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PWD'; `$env:CLERK_SECRET_KEY = 'YOUR_CLERK_SECRET_KEY'; cd backend; node server/api.js" -WindowStyle Minimized
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PWD'; cd backend; node server/api.js" -WindowStyle Minimized
 
 # Wait for backend to start
 Write-Host "Waiting for backend to initialize..." -ForegroundColor Cyan

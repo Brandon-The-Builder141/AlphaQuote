@@ -52,7 +52,7 @@ This guide will help you set up Clerk authentication for AlphaQuote to enable us
 2. **Update `.env` with your Clerk keys**
    ```env
    CLERK_SECRET_KEY=sk_test_your_clerk_secret_key_here
-   DATABASE_URL="REMOVED_LOCAL_SECRET"
+   DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DATABASE"
    API_PORT=3001
    ```
 

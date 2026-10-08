@@ -71,7 +71,6 @@ export const estimateSchema = z.object({
 export const vendorSchema = z.object({
   name: z.string().min(1, 'Vendor name is required').max(100, 'Name is too long'),
   contactInfo: z.string().max(200, 'Contact info is too long').optional(),
-  websiteUrl: z.string().url('Must be a valid URL').optional().or(z.literal('')),
   notes: z.string().max(1000, 'Notes are too long').optional()
 });
 

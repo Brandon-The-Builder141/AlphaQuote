@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { loadDemoData } from './utils/demoData';
 import PricingAssistant from './components/PricingAssistant';
 import ChangeOrderManager from './components/ChangeOrderManager';
 import RegionalPricePack from './components/RegionalPricePack';
 import TaskTemplates from './components/TaskTemplates';
-import CartImportFlow from './components/CartImportFlow';
 import { API_BASE_URL } from './config/env';
 import { generateQuotePDF } from './utils/pdfService';
 import { showSuccess, showError } from './utils/toastService';
@@ -20,8 +19,7 @@ import {
   Package,
   FileText,
   MapPin,
-  Star,
-  ShoppingCart
+  Star
 } from 'lucide-react';
 
 // Move RoomCard outside to prevent re-creation on every render
@@ -251,7 +249,6 @@ const EstimateForm = () => {
   const [userRegionSelection, setUserRegionSelection] = useState(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
-  const [showCartImport, setShowCartImport] = useState(false);
 
   const addRoom = () => {
     const newId = Math.max(...rooms.map(r => r.id), 0) + 1;
@@ -307,40 +304,6 @@ const EstimateForm = () => {
     }));
 
     setRooms([...rooms, ...newRooms]);
-  };
-
-  // Handle Cart Import
-  const handleCartImport = (items) => {
-    // Convert imported cart items to rooms format
-    const newRooms = items.map((item, index) => {
-      const totalCost = item.totalPrice || (item.quantity * item.unitPrice);
-      // Estimate square footage based on price if not provided
-      const estimatedSqft = item.quantity || 1;
-      const materialCostPerSqft = totalCost / estimatedSqft;
-
-      return {
-        id: Math.max(...rooms.map(r => r.id), 0) + index + 1,
-        name: item.name,
-        sqft: estimatedSqft,
-        material: item.name,
-        materialCost: materialCostPerSqft.toFixed(2),
-        labor: 'Installation',
-        laborHours: Math.ceil(estimatedSqft / 100), // Estimate 1 hour per 100 sqft
-        demo: false,
-        trim: false,
-        paint: false,
-        notes: item.sku ? `SKU: ${item.sku}` : ''
-      };
-    });
-
-    // If first room is empty, replace it; otherwise add to existing rooms
-    if (rooms.length === 1 && !rooms[0].name && !rooms[0].material) {
-      setRooms(newRooms);
-    } else {
-      setRooms([...rooms, ...newRooms]);
-    }
-
-    showSuccess(`Imported ${items.length} items from cart`);
   };
 
   // Regional Pricing Functions
@@ -638,15 +601,6 @@ const EstimateForm = () => {
               <Star className="w-4 h-4" />
               <span>Quick Templates</span>
             </motion.button>
-            <motion.button
-              onClick={() => setShowCartImport(true)}
-              className="flex items-center space-x-2 px-6 py-3 rounded-xl text-base font-bold transition-all duration-300 bg-gradient-to-r from-accent to-orange-500 hover:from-accent/90 hover:to-orange-500/90 text-white shadow-lg shadow-accent/30"
-              whileHover={{ scale: 1.08, y: -2 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <ShoppingCart className="w-5 h-5" />
-              <span>🛒 Import Cart</span>
-            </motion.button>
             <button
               onClick={() => navigate('/receipts')}
               className="bg-orange-600 hover:bg-orange-500 text-white px-3 py-2 rounded-lg text-xs transition-colors duration-200"
@@ -695,16 +649,6 @@ const EstimateForm = () => {
             onClose={() => setShowTemplates(false)}
           />
         )}
-
-        {/* Cart Import Flow Module */}
-        <AnimatePresence>
-          {showCartImport && (
-            <CartImportFlow
-              onImport={handleCartImport}
-              onClose={() => setShowCartImport(false)}
-            />
-          )}
-        </AnimatePresence>
 
         {/* Project Information */}
         <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">

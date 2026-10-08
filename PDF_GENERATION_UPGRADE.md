@@ -766,6 +766,3 @@ PDF generation has been completely modernized:
 **Package:** @react-pdf/renderer  
 **Result:** High-quality, fast, professional PDF generation! 🎉
 
-
-
-

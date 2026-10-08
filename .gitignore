@@ -461,3 +461,17 @@ docs/dist/
 *.psd
 *.ai
 *.sketch
+# Local secrets, runtime data, dependencies, and backups
+.env*
+!.env.example
+!.env.sample
+!.env.template
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.log
+*.db
+*.sqlite*
+*.zip

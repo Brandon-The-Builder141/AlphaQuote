@@ -11,8 +11,7 @@ import {
   TrendingUp,
   Cog,
   UserPlus,
-  Play,
-  Crown
+  Play
 } from 'lucide-react';
 
 export default function StartEstimate() {
@@ -122,15 +121,6 @@ export default function StartEstimate() {
           </motion.div>
 
           <div className="flex items-center gap-4">
-            <motion.button
-              onClick={() => window.location.href = 'https://buy.stripe.com/bJe28r4AM09beeq7TI1kA00'}
-              className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 text-white rounded-xl font-semibold shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-all duration-200"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <Crown className="w-4 h-4" />
-              Buy Now
-            </motion.button>
             <motion.button
               onClick={() => navigate('/setup')}
               className="flex items-center gap-2 px-4 py-2 bg-slate-800/50 hover:bg-slate-700/50 text-slate-300 hover:text-white rounded-xl border border-slate-700/50 hover:border-slate-600/50 transition-all duration-200 font-body"
@@ -411,13 +401,23 @@ export default function StartEstimate() {
             </div>
 
             <div className="flex items-center gap-4">
-              <motion.button
-                onClick={() => window.location.href = 'https://buy.stripe.com/bJe28r4AM09beeq7TI1kA00'}
-                className="text-slate-400 hover:text-primary transition-colors text-sm font-medium"
-                whileHover={{ scale: 1.05 }}
-              >
-                View Pricing
-              </motion.button>
+              {isSignedIn ? (
+                <motion.button
+                  onClick={() => navigate('/pricing')}
+                  className="bg-slate-800/50 hover:bg-slate-700/50 text-white px-4 py-2 rounded-lg transition-colors text-sm"
+                  whileHover={{ scale: 1.05 }}
+                >
+                  Upgrade to Pro
+                </motion.button>
+              ) : (
+                <motion.button
+                  onClick={() => navigate('/pricing')}
+                  className="text-slate-400 hover:text-white transition-colors text-sm"
+                  whileHover={{ scale: 1.05 }}
+                >
+                  View Pricing
+                </motion.button>
+              )}
             </div>
           </motion.div>
         </div>

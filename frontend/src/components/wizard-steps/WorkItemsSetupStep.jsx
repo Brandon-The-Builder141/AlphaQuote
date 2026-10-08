@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   Home,
   CheckSquare,
@@ -11,35 +11,11 @@ import {
   DollarSign,
   Clock,
   Package,
-  Hammer,
-  ShoppingCart
+  Hammer
 } from 'lucide-react';
-import CartImportFlow from '../CartImportFlow';
-import { showSuccess } from '../../utils/toastService';
 
 export default function WorkItemsSetupStep({ data, updateData, onNext, onBack }) {
   const [activeTab, setActiveTab] = useState('rooms'); // 'rooms' or 'tasks'
-  const [showCartImport, setShowCartImport] = useState(false);
-
-  // Handle cart import - convert cart items to work items
-  const handleCartImport = (cartItems) => {
-    const newWorkItems = cartItems.map(item => ({
-      id: Date.now() + Math.random(), // Unique ID
-      type: 'room',
-      name: item.name,
-      sqft: item.quantity || 1,
-      materialDescription: item.name,
-      materialCost: item.unitPrice.toFixed(2),
-      laborDescription: 'Installation',
-      laborHours: Math.ceil((item.quantity || 1) / 10), // Estimate 1 hour per 10 units
-      demo: false,
-      trim: false,
-      paint: false
-    }));
-
-    updateData({ workItems: [...(data.workItems || []), ...newWorkItems] });
-    showSuccess(`Imported ${cartItems.length} items from cart!`);
-  };
 
   const addRoom = () => {
     const newItem = {
@@ -115,18 +91,6 @@ export default function WorkItemsSetupStep({ data, updateData, onNext, onBack })
             </p>
           </div>
         </div>
-
-        {/* Import Cart Button */}
-        <motion.button
-          type="button"
-          onClick={() => setShowCartImport(true)}
-          className="flex items-center space-x-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 bg-gradient-to-r from-accent to-orange-500 hover:from-accent/90 hover:to-orange-500/90 text-white shadow-lg shadow-accent/20"
-          whileHover={{ scale: 1.05, y: -2 }}
-          whileTap={{ scale: 0.95 }}
-        >
-          <ShoppingCart className="w-4 h-4" />
-          <span>Import Cart</span>
-        </motion.button>
       </div>
 
       {/* Tab Selector */}
@@ -517,16 +481,6 @@ export default function WorkItemsSetupStep({ data, updateData, onNext, onBack })
           </motion.button>
         </div>
       </form>
-
-      {/* Cart Import Flow Modal */}
-      <AnimatePresence>
-        {showCartImport && (
-          <CartImportFlow
-            onImport={handleCartImport}
-            onClose={() => setShowCartImport(false)}
-          />
-        )}
-      </AnimatePresence>
     </motion.div>
   );
 }

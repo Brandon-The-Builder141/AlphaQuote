@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Plus, Building2, User, FileText, Globe } from 'lucide-react';
+import { ArrowLeft, Plus, Building2, User, FileText } from 'lucide-react';
 import { showSuccess, showError } from '../utils/toastService';
 import { API_BASE_URL } from '../config/env';
 import { vendorSchema } from '../schemas';
@@ -19,7 +19,6 @@ export default function VendorNew() {
     defaultValues: {
       name: '',
       contactInfo: '',
-      websiteUrl: '',
       notes: ''
     }
   });
@@ -160,29 +159,6 @@ export default function VendorNew() {
               />
               <p className="mt-1 text-sm text-slate-500 font-body">
                 Optional: Phone, email, or contact person name
-              </p>
-            </div>
-
-            {/* Website URL */}
-            <div>
-              <label htmlFor="websiteUrl" className="block text-sm font-medium text-slate-300 font-body mb-2 flex items-center gap-2">
-                <Globe className="w-4 h-4 text-primary" />
-                Website URL
-              </label>
-              <input
-                {...register('websiteUrl')}
-                type="url"
-                id="websiteUrl"
-                placeholder="https://www.example.com"
-                className={`w-full bg-slate-800/50 border rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200 font-body ${
-                  errors.websiteUrl ? 'border-red-500' : 'border-slate-700/50'
-                }`}
-              />
-              {errors.websiteUrl && (
-                <p className="mt-1 text-sm text-red-400 font-body">{errors.websiteUrl.message}</p>
-              )}
-              <p className="mt-1 text-sm text-slate-500 font-body">
-                Optional: Vendor's website for quick access and cart imports
               </p>
             </div>
 

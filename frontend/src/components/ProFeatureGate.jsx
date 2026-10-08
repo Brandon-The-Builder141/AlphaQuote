@@ -38,7 +38,7 @@ const ProFeatureGate = ({
   }, [user]);
 
   const handleUpgrade = () => {
-    window.location.href = 'https://buy.stripe.com/bJe28r4AM09beeq7TI1kA00';
+    window.location.href = '/pricing';
   };
 
   const handleCloseModal = () => {
@@ -89,7 +89,7 @@ const ProFeatureGate = ({
               }}
               className="bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300"
             >
-              Buy Now
+              Upgrade to Pro
             </button>
           </div>
         </div>
@@ -155,7 +155,7 @@ const ProFeatureGate = ({
                   onClick={handleUpgrade}
                   className="w-full bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 text-white py-3 px-6 rounded-xl font-semibold transition-all duration-300"
                 >
-                  Buy Now - Get Pro Access
+                  Start Pro Trial - $29/month
                 </button>
                 <button
                   onClick={handleCloseModal}

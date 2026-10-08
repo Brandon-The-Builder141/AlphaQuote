@@ -7,7 +7,7 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = "REMOVED_LOCAL_SECRET"
+  url      = env("DATABASE_URL")
 }
 
 // Local vendor/supplier information
