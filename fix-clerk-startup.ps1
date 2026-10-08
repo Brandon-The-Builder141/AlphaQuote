@@ -9,7 +9,7 @@ Start-Sleep -Seconds 2
 
 # Set environment variables
 Write-Host "`n2. Setting environment variables..." -ForegroundColor Yellow
-$env:REACT_APP_CLERK_PUBLISHABLE_KEY = "YOUR_CLERK_PUBLISHABLE_KEY"
+if (-not $env:REACT_APP_CLERK_PUBLISHABLE_KEY) { throw "Set REACT_APP_CLERK_PUBLISHABLE_KEY before starting AlphaQuote." }
 $env:REACT_APP_API_URL = "http://localhost:3001"
 if (-not $env:CLERK_SECRET_KEY) { throw "Set CLERK_SECRET_KEY before starting AlphaQuote." }
 Write-Host "✅ REACT_APP_CLERK_PUBLISHABLE_KEY: $env:REACT_APP_CLERK_PUBLISHABLE_KEY"
@@ -27,7 +27,7 @@ Start-Sleep -Seconds 5
 # Start frontend with environment variables
 Write-Host "`n4. Starting frontend with Clerk authentication..." -ForegroundColor Yellow
 cd frontend
-$env:REACT_APP_CLERK_PUBLISHABLE_KEY = "YOUR_CLERK_PUBLISHABLE_KEY"
+if (-not $env:REACT_APP_CLERK_PUBLISHABLE_KEY) { throw "Set REACT_APP_CLERK_PUBLISHABLE_KEY before starting AlphaQuote." }
 $env:REACT_APP_API_URL = "http://localhost:3001"
 npm start
 

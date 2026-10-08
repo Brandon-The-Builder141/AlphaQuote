@@ -2,7 +2,10 @@
 echo Starting AlphaQuote with proper environment variables...
 
 REM Set environment variables for development
-set REACT_APP_CLERK_PUBLISHABLE_KEY=YOUR_CLERK_PUBLISHABLE_KEY
+if not defined REACT_APP_CLERK_PUBLISHABLE_KEY (
+  echo Set REACT_APP_CLERK_PUBLISHABLE_KEY before starting AlphaQuote.
+  exit /b 1
+)
 set REACT_APP_API_URL=http://localhost:3001
 set REACT_APP_STRIPE_PUBLISHABLE_KEY=pk_test_placeholder_stripe_key
 if not defined CLERK_SECRET_KEY (

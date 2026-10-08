@@ -2,7 +2,7 @@
 Write-Host "🚀 Starting AlphaQuote..." -ForegroundColor Green
 
 # Set environment variables for development
-$env:REACT_APP_CLERK_PUBLISHABLE_KEY = "YOUR_CLERK_PUBLISHABLE_KEY"
+if (-not $env:REACT_APP_CLERK_PUBLISHABLE_KEY) { throw "Set REACT_APP_CLERK_PUBLISHABLE_KEY before starting AlphaQuote." }
 $env:REACT_APP_API_URL = "http://localhost:3001"
 $env:REACT_APP_STRIPE_PUBLISHABLE_KEY = "pk_test_placeholder_stripe_key"
 if (-not $env:CLERK_SECRET_KEY) { throw "Set CLERK_SECRET_KEY before starting AlphaQuote." }
