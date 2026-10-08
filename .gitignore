@@ -475,3 +475,9 @@ __pycache__/
 *.db
 *.sqlite*
 *.zip
+
+# React source directories are not generated dependencies
+!frontend/public/
+!frontend/public/**
+!frontend/src/lib/
+!frontend/src/lib/**
