@@ -1,6 +1,7 @@
 
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { useState, useEffect } from 'react';
+import { useAuth } from '@clerk/clerk-react';
 import { Toaster } from 'react-hot-toast';
 import ClerkProviderWrapper from './components/ClerkProvider';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -31,6 +32,51 @@ import SignUp from './pages/SignUp';
 import DemoMode from './pages/DemoMode';
 import ProfileSetup from './components/ProfileSetup';
 import Pricing from './pages/Pricing';
+import Landing from './pages/Landing';
+import Terms from './pages/Terms';
+import Privacy from './pages/Privacy';
+
+// Paths a logged-out visitor can land on. The first-run SetupWizard must not
+// hijack these — it is an in-app onboarding step, reachable at /setup.
+const PUBLIC_PATHS = ['/', '/pricing', '/terms', '/privacy', '/sign-in', '/sign-up', '/demo'];
+
+/**
+ * Root route: signed-in users get the app (unchanged behavior);
+ * logged-out visitors get the public landing page.
+ */
+function RootRoute() {
+  const { isSignedIn, isLoaded } = useAuth();
+
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  const hasClerkKey = process.env.REACT_APP_CLERK_PUBLISHABLE_KEY &&
+    process.env.REACT_APP_CLERK_PUBLISHABLE_KEY !== 'pk_test_placeholder_key_for_development' &&
+    (process.env.REACT_APP_CLERK_PUBLISHABLE_KEY.startsWith('pk_test_') ||
+      process.env.REACT_APP_CLERK_PUBLISHABLE_KEY.startsWith('pk_live_'));
+
+  const appHome = (
+    <ProtectedRoute>
+      <Layout>
+        <StartEstimate />
+      </Layout>
+    </ProtectedRoute>
+  );
+
+  // Same dev fallback as ProtectedRoute: no valid Clerk key in development
+  // means auth is bypassed, so show the app as before.
+  if (isDevelopment && !hasClerkKey) {
+    return appHome;
+  }
+
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
+        <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  return isSignedIn ? appHome : <Landing />;
+}
 
 function App() {
   const [showWizard, setShowWizard] = useState(false);
@@ -53,7 +99,9 @@ function App() {
     const wizardSkipped = localStorage.getItem('alphaquote_wizard_skipped');
     const isFirstTime = !wizardCompleted && !wizardSkipped;
 
-    if (isFirstTime) {
+    // Only auto-show the setup wizard inside the app — never on public
+    // marketing/legal pages, where it would block logged-out visitors.
+    if (isFirstTime && !PUBLIC_PATHS.includes(window.location.pathname)) {
       setShowWizard(true);
     }
 
@@ -140,17 +188,13 @@ function App() {
       <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           {/* Public Routes */}
-          <Route path="/" element={
-            <ProtectedRoute>
-              <Layout>
-                <StartEstimate />
-              </Layout>
-            </ProtectedRoute>
-          } />
+          <Route path="/" element={<RootRoute />} />
           <Route path="/sign-in" element={<SignIn />} />
           <Route path="/sign-up" element={<SignUp />} />
           <Route path="/demo" element={<DemoMode />} />
           <Route path="/pricing" element={<Pricing />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Privacy />} />
           <Route path="/profile-setup" element={<ProfileSetup />} />
 
           {/* Protected Routes with Layout */}
