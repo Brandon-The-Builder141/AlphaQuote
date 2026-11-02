@@ -1,8 +1,17 @@
 // Enhanced Multi-Site Price Scraper for AlphaQuote using SerpAPI
 // Professional price scraping with Google Shopping results
+//
+// Pass Two finish (lockdown): this service previously served fully open
+// endpoints — anyone who could reach it could burn the paid SerpAPI quota
+// behind it. The data routes now require the same verified Clerk token as
+// the main API (backend/middleware/auth.js). The SerpAPI key comes only
+// from the SERPAPI_KEY environment variable; no key material exists in
+// code. The only public route left is GET /health, a liveness probe that
+// returns no data and makes no SerpAPI call.
 
 const express = require("express");
 const cors = require("cors");
+const { authenticateUser } = require("../middleware/auth");
 
 // Use built-in fetch for Node.js 18+ or node-fetch for older versions
 const fetch = globalThis.fetch || require('node-fetch');
@@ -20,7 +29,23 @@ const isSerpApiEnabled = () => {
 const app = express();
 const PORT = process.env.SCRAPER_PORT || 5050;
 
-app.use(cors());
+// CORS: same explicit allowlist as the main API (Pass Two).
+const corsAllowlist = (
+  process.env.CORS_ALLOWED_ORIGINS ||
+  [process.env.FRONTEND_URL || 'http://localhost:3000', 'http://localhost:3000', 'http://127.0.0.1:3000'].join(',')
+)
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || corsAllowlist.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(null, false);
+  }
+}));
 
 // Log startup configuration
 if (process.env.DEBUG === 'true') {
@@ -140,8 +165,8 @@ const scrapers = {
   }
 };
 
-// Main scraping endpoint with SerpAPI integration
-app.get("/scrape-price", async (req, res) => {
+// Main scraping endpoint with SerpAPI integration (Clerk auth required)
+app.get("/scrape-price", authenticateUser, async (req, res) => {
   const search = req.query.search || "vinyl flooring";
   const zip = req.query.zip || "90210";
   const sites = req.query.sites ? req.query.sites.split(',') : ['allStores']; // Default to general search
@@ -153,8 +178,8 @@ app.get("/scrape-price", async (req, res) => {
     const allPrices = [];
     const results = {};
 
-    // Check if API key is configured
-    if (SERPAPI_KEY === 'your_serpapi_key_here') {
+    // Check if API key is configured (env-only; never hardcoded)
+    if (!isSerpApiEnabled()) {
       console.warn('⚠️ SerpAPI key not configured, using fallback data');
       
       // Return fallback pricing data
@@ -295,9 +320,9 @@ const calculateAveragePrice = (prices) => {
   return `$${average.toFixed(2)}`;
 };
 
-// Health check endpoint
+// Health check endpoint (public liveness probe: no data, no SerpAPI call)
 app.get("/health", (req, res) => {
-  const apiConfigured = SERPAPI_KEY !== 'your_serpapi_key_here';
+  const apiConfigured = isSerpApiEnabled();
   res.json({ 
     status: "healthy", 
     timestamp: new Date().toISOString(),
@@ -308,8 +333,8 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Site-specific endpoints
-app.get("/scrape/:site", async (req, res) => {
+// Site-specific endpoints (Clerk auth required)
+app.get("/scrape/:site", authenticateUser, async (req, res) => {
   const site = req.params.site;
   const search = req.query.search || "vinyl flooring";
   const zip = req.query.zip || "90210";
@@ -338,9 +363,9 @@ app.get("/scrape/:site", async (req, res) => {
   }
 });
 
-// Get available sites and SerpAPI info
-app.get("/sites", (req, res) => {
-  const apiConfigured = SERPAPI_KEY !== 'your_serpapi_key_here';
+// Get available sites and SerpAPI info (Clerk auth required)
+app.get("/sites", authenticateUser, (req, res) => {
+  const apiConfigured = isSerpApiEnabled();
   res.json({
     availableSites: Object.keys(scrapers),
     descriptions: {
@@ -365,9 +390,10 @@ app.get("/sites", (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  const apiConfigured = SERPAPI_KEY !== 'your_serpapi_key_here';
-  
+if (require.main === module) {
+  app.listen(PORT, () => {
+  const apiConfigured = isSerpApiEnabled();
+
   console.log(`🚀 AlphaQuote SerpAPI Price Scraper v2.0 running at http://localhost:${PORT}`);
   console.log(`📊 Available sites: ${Object.keys(scrapers).join(', ')}`);
   console.log(`🔗 Health check: http://localhost:${PORT}/health`);
@@ -385,4 +411,7 @@ app.listen(PORT, () => {
   }
   
   console.log('');
-});
+  });
+}
+
+module.exports = app;
