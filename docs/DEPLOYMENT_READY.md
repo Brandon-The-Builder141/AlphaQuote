@@ -1,3 +1,8 @@
+> ⚠️ **SUPERSEDED (2026-11-02):** This document predates the Pass One audit
+> and Pass Two lockdown. Its readiness claims are **not accurate**. See
+> `STATUS.md` at the repo root for the verified state and `docs/DEPLOY.md`
+> for the real deploy path.
+
 # 🚀 AlphaQuote Manual Deployment - READY!
 
 ## ✅ Deployment Package Created Successfully!

@@ -27,7 +27,8 @@ const isSerpApiEnabled = () => {
 };
 
 const app = express();
-const PORT = process.env.SCRAPER_PORT || 5050;
+// SCRAPER_PORT wins when set (local dev); fall back to the host-injected PORT.
+const PORT = process.env.SCRAPER_PORT || process.env.PORT || 5050;
 
 // CORS: same explicit allowlist as the main API (Pass Two).
 const corsAllowlist = (

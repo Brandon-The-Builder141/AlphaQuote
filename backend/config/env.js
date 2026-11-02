@@ -9,8 +9,9 @@
 
 
 // API Configuration
-
-const API_PORT = process.env.API_PORT || 3001;
+// Railway (and most PaaS hosts) inject PORT; API_PORT still wins when set,
+// so local dev is unchanged.
+const API_PORT = process.env.API_PORT || process.env.PORT || 3001;
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 
