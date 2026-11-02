@@ -431,40 +431,30 @@ class OfflineWrapper {
   /**
    * User Management API wrapper (always online)
    */
+  // Pass Two (lockdown): the legacy user-management endpoints
+  // (GET/POST /api/users) were removed — Clerk is the only account
+  // system. These stubs keep the call sites from breaking; the current
+  // user comes from Clerk via services/authService.js.
   async getUsers() {
-    // User management always requires online connection
-    const response = await fetch(`${this.API_BASE_URL}/users`);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    return await response.json();
+    throw new Error('Legacy user list removed. User data comes from Clerk.');
   }
 
-  async createUser(data) {
-    const response = await fetch(`${this.API_BASE_URL}/users`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    return await response.json();
+  async createUser() {
+    throw new Error(
+      'Account creation moved to Clerk sign-up. Please use the sign-up page instead.'
+    );
   }
 
   /**
    * Authentication API wrapper (always online)
    */
-  async login(email, password) {
-    const response = await fetch(`${this.API_BASE_URL}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    return await response.json();
+  // Pass Two (lockdown): the legacy password login endpoint
+  // (POST /api/auth/login) was removed — sign-in happens through Clerk
+  // (see services/authService.js).
+  async login() {
+    throw new Error(
+      'Password sign-in was removed. Please sign in with Clerk instead.'
+    );
   }
 
   /**

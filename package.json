@@ -3,14 +3,24 @@
   "version": "1.0.0",
   "description": "AlphaQuote Backend API",
   "main": "backend/server/api.js",
+  "scripts": {
+    "test": "node --test \"backend/tests/*.test.js\""
+  },
   "dependencies": {
     "@clerk/clerk-sdk-node": "^4.13.23",
     "@prisma/client": "^6.16.3",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "express": "^5.1.0",
-    "jsonwebtoken": "^9.0.2",
-    "nodemailer": "^7.0.6"
+    "nodemailer": "^10.3.1",
+    "svix": "^2.9.1"
+  },
+  "overrides": {
+    "form-data": "^3.0.5",
+    "path-to-regexp": "^8.4.0",
+    "defu": "^6.1.5",
+    "js-cookie": "^3.0.7",
+    "effect": "^3.20.0"
   },
   "devDependencies": {
     "prisma": "^6.16.3"
