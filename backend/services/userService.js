@@ -1,40 +1,101 @@
 /**
  * User Service
  * Manages user data and synchronization with Clerk
+ *
+ * Pass Two finish (provisioning): users are linked to Clerk by the
+ * `clerkId` column on the User model. Provisioning accepts either shape:
+ *   - a Clerk webhook user object ({ id, email_addresses: [{email_address}],
+ *     first_name, last_name }), or
+ *   - the verified-token identity built by middleware/auth.js
+ *     ({ id, email, firstName, lastName }).
+ *
+ * Resolution order in createOrUpdateUser:
+ *   1. existing row with this clerkId          -> update profile fields
+ *   2. existing row with this email (legacy)   -> link clerkId, update
+ *   3. no row at all                           -> create a ContractorAccount
+ *      for the user plus their User row (User.contractorAccountId is
+ *      required, so a brand-new identity needs both).
+ *
+ * The local `password` column is legacy (password sign-in was removed in
+ * Pass Two); Clerk-provisioned users get a random, unusable value — Clerk
+ * is the only credential authority.
  */
 
+const crypto = require('crypto');
 const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
 
+function normalizeClerkUser(clerkUser) {
+  return {
+    clerkId: clerkUser.id || clerkUser.sub,
+    email:
+      clerkUser.emailAddresses?.[0]?.emailAddress ||
+      clerkUser.email_addresses?.[0]?.email_address ||
+      clerkUser.email,
+    firstName: clerkUser.firstName ?? clerkUser.first_name ?? '',
+    lastName: clerkUser.lastName ?? clerkUser.last_name ?? ''
+  };
+}
+
 class UserService {
   /**
-   * Create or update user from Clerk data
-   * @param {Object} clerkUser - User data from Clerk
+   * Create or update user from Clerk data, linking by clerkId.
+   * @param {Object} clerkUser - Clerk user object or verified-token identity
    * @returns {Object} User data
    */
   async createOrUpdateUser(clerkUser) {
     try {
-      const userData = {
-        clerkId: clerkUser.id,
-        email: clerkUser.emailAddresses?.[0]?.emailAddress || clerkUser.email,
-        firstName: clerkUser.firstName,
-        lastName: clerkUser.lastName,
-        profileImageUrl: clerkUser.profileImageUrl,
-        publicMetadata: clerkUser.publicMetadata,
-        privateMetadata: clerkUser.privateMetadata
-      };
+      const { clerkId, email, firstName, lastName } = normalizeClerkUser(clerkUser);
 
-      const user = await prisma.user.upsert({
-        where: { clerkId: clerkUser.id },
-        update: userData,
-        create: userData
+      if (!clerkId || !email) {
+        return { success: false, error: 'Clerk identity is missing an id or email' };
+      }
+
+      // 1. Already linked by clerkId.
+      const byClerkId = await prisma.user.findUnique({ where: { clerkId } });
+      if (byClerkId) {
+        const user = await prisma.user.update({
+          where: { id: byClerkId.id },
+          data: { email, firstName, lastName, lastLogin: new Date() }
+        });
+        return { success: true, data: user };
+      }
+
+      // 2. Legacy row matched by email: link the clerkId onto it.
+      const byEmail = await prisma.user.findUnique({ where: { email } });
+      if (byEmail) {
+        const user = await prisma.user.update({
+          where: { id: byEmail.id },
+          data: { clerkId, firstName, lastName, lastLogin: new Date() }
+        });
+        return { success: true, data: user };
+      }
+
+      // 3. Brand-new identity: create their contractor account and user.
+      const contractorAccount = await prisma.contractorAccount.create({
+        data: {
+          name: `${firstName || 'New'} ${lastName || 'Contractor'}`.trim() + ' Company',
+          email
+        }
       });
 
-      return {
-        success: true,
-        data: user
-      };
+      const user = await prisma.user.create({
+        data: {
+          clerkId,
+          email,
+          firstName,
+          lastName,
+          // No local password sign-in exists anymore; store an unusable
+          // random placeholder to satisfy the legacy NOT NULL column.
+          password: crypto.randomBytes(32).toString('hex'),
+          role: 'admin',
+          contractorAccountId: contractorAccount.id,
+          lastLogin: new Date()
+        }
+      });
+
+      return { success: true, data: user };
     } catch (error) {
       console.error('Error creating/updating user:', error);
       return {
@@ -86,13 +147,13 @@ class UserService {
    */
   async updateUserProfile(clerkId, profileData) {
     try {
+      const data = {};
+      if (profileData.firstName !== undefined) data.firstName = profileData.firstName;
+      if (profileData.lastName !== undefined) data.lastName = profileData.lastName;
+
       const updatedUser = await prisma.user.update({
         where: { clerkId },
-        data: {
-          firstName: profileData.firstName,
-          lastName: profileData.lastName,
-          publicMetadata: profileData.metadata || {}
-        }
+        data
       });
 
       return {
@@ -109,7 +170,9 @@ class UserService {
   }
 
   /**
-   * Create contractor account for user
+   * Create contractor account for user and move the user onto it.
+   * (A user belongs to exactly one contractor account; the schema's
+   * ContractorAccount has name/email/phone/address fields only.)
    * @param {string} clerkId - Clerk user ID
    * @param {Object} companyData - Company information
    * @returns {Object} Contractor account data
@@ -123,18 +186,16 @@ class UserService {
 
       const contractorAccount = await prisma.contractorAccount.create({
         data: {
-          companyName: companyData.companyName,
+          name: companyData.companyName || companyData.name,
           email: companyData.email,
           phone: companyData.phone,
-          address: companyData.address,
-          website: companyData.website,
-          license: companyData.license,
-          primaryColor: companyData.primaryColor || '#3b82f6',
-          secondaryColor: companyData.secondaryColor || '#1e40af',
-          users: {
-            connect: { id: user.data.id }
-          }
+          address: companyData.address
         }
+      });
+
+      await prisma.user.update({
+        where: { id: user.data.id },
+        data: { contractorAccountId: contractorAccount.id }
       });
 
       return {
@@ -185,21 +246,25 @@ class UserService {
   }
 
   /**
-   * Check if user has Pro subscription
+   * Check if user has Pro subscription.
+   * Subscription status lives in Clerk public metadata, not in the app
+   * database, so it is read from the verified token's metadata when the
+   * caller passes it (see GET /api/users/subscription).
    * @param {string} clerkId - Clerk user ID
+   * @param {Object} [tokenMetadata] - public_metadata from the verified token
    * @returns {boolean} Whether user has Pro subscription
    */
-  async hasProSubscription(clerkId) {
+  async hasProSubscription(clerkId, tokenMetadata) {
     try {
       const user = await prisma.user.findUnique({
-        where: { clerkId },
-        include: {
-          contractorAccount: true
-        }
+        where: { clerkId }
       });
 
-      // Check public metadata for subscription status
-      const subscriptionStatus = user?.publicMetadata?.subscription || 'free';
+      if (!user) {
+        return false;
+      }
+
+      const subscriptionStatus = tokenMetadata?.subscription || 'free';
       return subscriptionStatus === 'pro' || subscriptionStatus === 'enterprise';
     } catch (error) {
       console.error('Error checking subscription:', error);
@@ -208,46 +273,24 @@ class UserService {
   }
 
   /**
-   * Update user subscription status
+   * Deactivate a user by Clerk ID (Clerk user.deleted webhook).
    * @param {string} clerkId - Clerk user ID
-   * @param {string} subscription - Subscription level
-   * @returns {Object} Updated user data
+   * @returns {Object} Result
    */
-  async updateSubscription(clerkId, subscription) {
+  async deactivateUserByClerkId(clerkId) {
     try {
-      const user = await prisma.user.findUnique({
-        where: { clerkId }
-      });
-
+      const user = await prisma.user.findUnique({ where: { clerkId } });
       if (!user) {
-        return {
-          success: false,
-          error: 'User not found'
-        };
+        return { success: true, data: null }; // nothing to deactivate
       }
-
-      const updatedMetadata = {
-        ...user.publicMetadata,
-        subscription
-      };
-
-      const updatedUser = await prisma.user.update({
-        where: { clerkId },
-        data: {
-          publicMetadata: updatedMetadata
-        }
+      const updated = await prisma.user.update({
+        where: { id: user.id },
+        data: { isActive: false }
       });
-
-      return {
-        success: true,
-        data: updatedUser
-      };
+      return { success: true, data: updated };
     } catch (error) {
-      console.error('Error updating subscription:', error);
-      return {
-        success: false,
-        error: error.message
-      };
+      console.error('Error deactivating user:', error);
+      return { success: false, error: error.message };
     }
   }
 }

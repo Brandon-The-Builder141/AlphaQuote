@@ -290,6 +290,11 @@ model FollowUpReminder {
   // Relations
   template    FollowUpTemplate? @relation(fields: [templateId], references: [id])
   templateId  String?
+
+  // Multi-user ownership (Pass Two: added so follow-ups can be tenant-scoped
+  // like every other multi-user model; scalar fields, stamped by the API)
+  contractorAccountId String?
+  createdById         String?
 }
 
 // Email templates for follow-ups
@@ -340,6 +345,7 @@ model ContractorAccount {
 // User accounts within contractor accounts
 model User {
   id          String   @id @default(cuid())
+  clerkId     String?  @unique // Clerk user id (Pass Two finish); null on legacy rows until first authenticated contact backfills it
   email       String   @unique
   firstName   String
   lastName    String

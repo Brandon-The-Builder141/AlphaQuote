@@ -7,8 +7,14 @@ const express = require('express');
 const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
 const nodemailer = require('nodemailer');
-const { authenticateUser, optionalAuth } = require('../middleware/auth');
+const { authenticateUser } = require('../middleware/auth');
+const { resolveTenant, scopeWhere } = require('../middleware/tenant');
+const { escapeHtml, sanitizeHeaderValue } = require('../utils/escapeHtml');
+const { Webhook } = require('svix');
 const userService = require('../services/userService');
+
+// Data routes require a verified Clerk identity AND a provisioned tenant.
+const requireTenantAuth = [authenticateUser, resolveTenant];
 const config = require('../config/env');
 
 const app = express();
@@ -28,7 +34,84 @@ if (config.DEBUG) {
 }
 
 // Middleware
-app.use(cors());
+// CORS: explicit allowlist only (Pass Two). Origins come from the
+// CORS_ALLOWED_ORIGINS env var (comma-separated); by default only the
+// configured frontend URL and the local dev origins are allowed.
+// Requests with no Origin header (curl, server-to-server) are not browser
+// CORS requests and pass; browser requests from unlisted origins receive
+// no CORS headers, so browsers block them.
+const corsAllowlist = (
+  process.env.CORS_ALLOWED_ORIGINS ||
+  [config.FRONTEND_URL, 'http://localhost:3000', 'http://127.0.0.1:3000'].join(',')
+)
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || corsAllowlist.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(null, false);
+  }
+}));
+// Clerk webhook (Pass Two finish). This is the ONE new public route: it is
+// registered BEFORE express.json() because Svix signature verification
+// needs the exact raw request body. It is not token-authenticated —
+// authenticity comes from the Svix signature, verified against
+// CLERK_WEBHOOK_SECRET. Unsigned or invalidly-signed deliveries get 401,
+// and the endpoint fails closed when the secret is not configured.
+app.post(
+  '/api/webhooks/clerk',
+  express.raw({ type: 'application/json' }),
+  async (req, res) => {
+    const webhookSecret = process.env.CLERK_WEBHOOK_SECRET;
+    const svixId = req.headers['svix-id'];
+    const svixTimestamp = req.headers['svix-timestamp'];
+    const svixSignature = req.headers['svix-signature'];
+
+    if (!webhookSecret || !svixId || !svixTimestamp || !svixSignature) {
+      return res.status(401).json({ success: false, error: 'Webhook signature verification failed' });
+    }
+
+    let evt;
+    try {
+      const rawBody = req.body.toString('utf8');
+      // svix v2: verify() throws on an invalid signature and returns
+      // nothing on success, so the event is parsed from the raw body
+      // only after the signature has been verified.
+      new Webhook(webhookSecret).verify(rawBody, {
+        'svix-id': svixId,
+        'svix-timestamp': svixTimestamp,
+        'svix-signature': svixSignature
+      });
+      evt = JSON.parse(rawBody);
+    } catch (error) {
+      return res.status(401).json({ success: false, error: 'Webhook signature verification failed' });
+    }
+
+    try {
+      if (evt.type === 'user.created' || evt.type === 'user.updated') {
+        const result = await userService.createOrUpdateUser(evt.data);
+        if (!result.success) {
+          console.error('Clerk webhook provisioning failed:', result.error);
+          return res.status(500).json({ success: false, error: 'Provisioning failed' });
+        }
+      } else if (evt.type === 'user.deleted') {
+        if (evt.data && evt.data.id) {
+          await userService.deactivateUserByClerkId(evt.data.id);
+        }
+      }
+      // Any other event type is acknowledged and ignored.
+      return res.json({ success: true });
+    } catch (error) {
+      console.error('Clerk webhook handling error:', error);
+      return res.status(500).json({ success: false, error: 'Webhook handling failed' });
+    }
+  }
+);
+
 app.use(express.json());
 
 // Health Check
@@ -120,7 +203,7 @@ app.post('/api/users/contractor-account', authenticateUser, async (req, res) => 
 
 app.get('/api/users/subscription', authenticateUser, async (req, res) => {
   try {
-    const hasPro = await userService.hasProSubscription(req.user.id);
+    const hasPro = await userService.hasProSubscription(req.user.id, req.user.metadata);
     
     res.json({ 
       success: true, 
@@ -136,9 +219,10 @@ app.get('/api/users/subscription', authenticateUser, async (req, res) => {
 });
 
 // Vendor Routes (now with optional authentication)
-app.get('/api/vendors', optionalAuth, async (req, res) => {
+app.get('/api/vendors', requireTenantAuth, async (req, res) => {
   try {
     const vendors = await prisma.localVendor.findMany({
+      where: scopeWhere(req),
       orderBy: { name: 'asc' },
       include: {
         prices: true,
@@ -153,7 +237,7 @@ app.get('/api/vendors', optionalAuth, async (req, res) => {
   }
 });
 
-app.post('/api/vendors', async (req, res) => {
+app.post('/api/vendors', requireTenantAuth, async (req, res) => {
   try {
     const { name, contactInfo, notes } = req.body;
 
@@ -170,6 +254,8 @@ app.post('/api/vendors', async (req, res) => {
         name: name.trim(),
         contact: contactInfo?.trim() || null,
         notes: notes?.trim() || null,
+        contractorAccountId: req.tenantId,
+        createdById: req.dbUser.id,
       },
     });
 
@@ -181,7 +267,7 @@ app.post('/api/vendors', async (req, res) => {
   }
 });
 
-app.put('/api/vendors/:id', async (req, res) => {
+app.put('/api/vendors/:id', requireTenantAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, contactInfo, notes } = req.body;
@@ -192,6 +278,13 @@ app.put('/api/vendors/:id', async (req, res) => {
         success: false, 
         error: 'Vendor name is required' 
       });
+    }
+
+    const ownedVendor = await prisma.localVendor.findFirst({
+      where: { AND: [{ id }, scopeWhere(req)] }
+    });
+    if (!ownedVendor) {
+      return res.status(404).json({ success: false, error: 'Vendor not found' });
     }
 
     const vendor = await prisma.localVendor.update({
@@ -211,9 +304,16 @@ app.put('/api/vendors/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/vendors/:id', async (req, res) => {
+app.delete('/api/vendors/:id', requireTenantAuth, async (req, res) => {
   try {
     const { id } = req.params;
+
+    const ownedVendor = await prisma.localVendor.findFirst({
+      where: { AND: [{ id }, scopeWhere(req)] }
+    });
+    if (!ownedVendor) {
+      return res.status(404).json({ success: false, error: 'Vendor not found' });
+    }
 
     await prisma.localVendor.delete({
       where: { id },
@@ -228,9 +328,10 @@ app.delete('/api/vendors/:id', async (req, res) => {
 });
 
 // Project Routes
-app.get('/api/projects', async (req, res) => {
+app.get('/api/projects', requireTenantAuth, async (req, res) => {
   try {
     const projects = await prisma.project.findMany({
+      where: scopeWhere(req),
       orderBy: {
         createdAt: 'desc'
       }
@@ -253,12 +354,12 @@ app.get('/api/projects', async (req, res) => {
   }
 });
 
-app.get('/api/projects/:id', async (req, res) => {
+app.get('/api/projects/:id', requireTenantAuth, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const project = await prisma.project.findUnique({
-      where: { id },
+    const project = await prisma.project.findFirst({
+      where: { AND: [{ id }, scopeWhere(req)] },
       include: {
         receipts: {
           include: {
@@ -311,7 +412,7 @@ app.get('/api/projects/:id', async (req, res) => {
 });
 
 // Receipt Routes
-app.post('/api/receipts', async (req, res) => {
+app.post('/api/receipts', requireTenantAuth, async (req, res) => {
   try {
     const { vendor, purchaseDate, items, total, fileName, rawText, projectId } = req.body;
 
@@ -339,7 +440,7 @@ app.post('/api/receipts', async (req, res) => {
 
     // Create or find vendor
     let vendorRecord = await prisma.localVendor.findFirst({
-      where: { name: vendor.trim() }
+      where: { AND: [{ name: vendor.trim() }, scopeWhere(req)] }
     });
     
     if (!vendorRecord) {
@@ -347,9 +448,24 @@ app.post('/api/receipts', async (req, res) => {
         data: {
           name: vendor.trim(),
           contact: null,
-          notes: 'Created from receipt processing'
+          notes: 'Created from receipt processing',
+          contractorAccountId: req.tenantId,
+          createdById: req.dbUser.id
         }
       });
+    }
+
+    // If a project is referenced, it must belong to the caller's tenant
+    if (projectId) {
+      const ownedProject = await prisma.project.findFirst({
+        where: { AND: [{ id: projectId }, scopeWhere(req)] }
+      });
+      if (!ownedProject) {
+        return res.status(400).json({
+          success: false,
+          error: 'Project not found'
+        });
+      }
     }
 
     // Create receipt record
@@ -361,7 +477,9 @@ app.post('/api/receipts', async (req, res) => {
         fileName: fileName || 'unknown',
         category: 'General',
         verified: false,
-        projectId: projectId || null
+        projectId: projectId || null,
+        contractorAccountId: req.tenantId,
+        createdById: req.dbUser.id
       }
     });
 
@@ -440,9 +558,10 @@ app.post('/api/receipts', async (req, res) => {
   }
 });
 
-app.get('/api/receipts', async (req, res) => {
+app.get('/api/receipts', requireTenantAuth, async (req, res) => {
   try {
     const receipts = await prisma.receipt.findMany({
+      where: scopeWhere(req),
       include: {
         vendor: true,
         items: true,
@@ -476,12 +595,12 @@ app.get('/api/receipts', async (req, res) => {
   }
 });
 
-app.get('/api/receipts/:id', async (req, res) => {
+app.get('/api/receipts/:id', requireTenantAuth, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const receipt = await prisma.receipt.findUnique({
-      where: { id },
+    const receipt = await prisma.receipt.findFirst({
+      where: { AND: [{ id }, scopeWhere(req)] },
       include: {
         vendor: true,
         items: true,
@@ -524,10 +643,20 @@ app.get('/api/receipts/:id', async (req, res) => {
   }
 });
 
-app.put('/api/receipts/:id', async (req, res) => {
+app.put('/api/receipts/:id', requireTenantAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { vendorName, purchaseDate, totalAmount, notes, status, projectId } = req.body;
+
+    const ownedReceipt = await prisma.receipt.findFirst({
+      where: { AND: [{ id }, scopeWhere(req)] }
+    });
+    if (!ownedReceipt) {
+      return res.status(404).json({
+        success: false,
+        error: 'Receipt not found'
+      });
+    }
 
     // Validate required fields
     if (!vendorName || vendorName.trim() === '') {
@@ -553,7 +682,7 @@ app.put('/api/receipts/:id', async (req, res) => {
 
     // Find or create vendor
     let vendorRecord = await prisma.localVendor.findFirst({
-      where: { name: vendorName.trim() }
+      where: { AND: [{ name: vendorName.trim() }, scopeWhere(req)] }
     });
 
     if (!vendorRecord) {
@@ -561,7 +690,9 @@ app.put('/api/receipts/:id', async (req, res) => {
         data: {
           name: vendorName.trim(),
           contact: null,
-          notes: 'Created from receipt update'
+          notes: 'Created from receipt update',
+          contractorAccountId: req.tenantId,
+          createdById: req.dbUser.id
         }
       });
     }
@@ -604,9 +735,19 @@ app.put('/api/receipts/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/receipts/:id', async (req, res) => {
+app.delete('/api/receipts/:id', requireTenantAuth, async (req, res) => {
   try {
     const { id } = req.params;
+
+    const ownedReceipt = await prisma.receipt.findFirst({
+      where: { AND: [{ id }, scopeWhere(req)] }
+    });
+    if (!ownedReceipt) {
+      return res.status(404).json({
+        success: false,
+        error: 'Receipt not found'
+      });
+    }
 
     // Delete receipt items first (due to foreign key constraint)
     await prisma.receiptItem.deleteMany({
@@ -658,7 +799,7 @@ const emailTransporter = nodemailer.createTransport({
 // });
 
 // Email quote endpoint
-app.post('/api/email-quote', async (req, res) => {
+app.post('/api/email-quote', authenticateUser, async (req, res) => {
   try {
     const { recipient, subject, message, quoteData } = req.body;
 
@@ -667,6 +808,44 @@ app.post('/api/email-quote', async (req, res) => {
         error: 'Recipient email and subject are required' 
       });
     }
+
+    if (!quoteData || !quoteData.projectInfo || !Array.isArray(quoteData.rooms)) {
+      return res.status(400).json({
+        error: 'Quote data with project info and rooms is required'
+      });
+    }
+
+    // Pass Two: every caller-supplied value that lands in the email is
+    // sanitized first — headers get CR/LF stripped, HTML body values are
+    // escaped. Previously this endpoint interpolated raw caller data into
+    // HTML and required no authentication at all.
+    const safeSubject = sanitizeHeaderValue(subject);
+    const safeRecipient = sanitizeHeaderValue(recipient);
+    const safeMessage = escapeHtml(message || 'Please find attached your detailed construction estimate.');
+    const info = quoteData.projectInfo;
+    const safeQuoteData = {
+      projectInfo: {
+        clientName: escapeHtml(info.clientName),
+        jobType: escapeHtml(info.jobType),
+        projectDescription: escapeHtml(info.projectDescription),
+        address: escapeHtml(info.address),
+        phone: escapeHtml(info.phone),
+        email: escapeHtml(info.email)
+      },
+      rooms: quoteData.rooms.map((room) => ({
+        ...room,
+        name: escapeHtml(room.name),
+        sqft: escapeHtml(room.sqft),
+        material: escapeHtml(room.material),
+        materialCost: escapeHtml(room.materialCost),
+        labor: escapeHtml(room.labor),
+        laborHours: escapeHtml(room.laborHours)
+      })),
+      subtotal: escapeHtml(quoteData.subtotal),
+      markup: escapeHtml(quoteData.markup),
+      markupAmount: escapeHtml(quoteData.markupAmount),
+      total: escapeHtml(quoteData.total)
+    };
 
     // Format the quote data into HTML email
     const htmlContent = `
@@ -680,12 +859,12 @@ app.post('/api/email-quote', async (req, res) => {
         <div style="margin-bottom: 30px;">
           <h2 style="color: #333; font-size: 20px; border-bottom: 2px solid #ddd; padding-bottom: 10px;">Project Information</h2>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
-            <div><strong>Client:</strong> ${quoteData.projectInfo.clientName}</div>
-            <div><strong>Job Type:</strong> ${quoteData.projectInfo.jobType}</div>
-            <div><strong>Project:</strong> ${quoteData.projectInfo.projectDescription}</div>
-            <div><strong>Address:</strong> ${quoteData.projectInfo.address}</div>
-            <div><strong>Phone:</strong> ${quoteData.projectInfo.phone}</div>
-            <div><strong>Email:</strong> ${quoteData.projectInfo.email}</div>
+            <div><strong>Client:</strong> ${safeQuoteData.projectInfo.clientName}</div>
+            <div><strong>Job Type:</strong> ${safeQuoteData.projectInfo.jobType}</div>
+            <div><strong>Project:</strong> ${safeQuoteData.projectInfo.projectDescription}</div>
+            <div><strong>Address:</strong> ${safeQuoteData.projectInfo.address}</div>
+            <div><strong>Phone:</strong> ${safeQuoteData.projectInfo.phone}</div>
+            <div><strong>Email:</strong> ${safeQuoteData.projectInfo.email}</div>
           </div>
         </div>
 
@@ -704,7 +883,7 @@ app.post('/api/email-quote', async (req, res) => {
               </tr>
             </thead>
             <tbody>
-              ${quoteData.rooms.map((room, index) => `
+              ${safeQuoteData.rooms.map((room, index) => `
                 <tr style="background-color: ${index % 2 === 0 ? '#f9f9f9' : 'white'};">
                   <td style="border: 1px solid #ddd; padding: 12px;">${room.name}</td>
                   <td style="border: 1px solid #ddd; padding: 12px;">${room.sqft}</td>
@@ -723,15 +902,15 @@ app.post('/api/email-quote', async (req, res) => {
           <h2 style="color: #333; font-size: 20px; margin-bottom: 15px;">Cost Summary</h2>
           <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
             <span>Subtotal:</span>
-            <span style="font-weight: bold;">$${quoteData.subtotal}</span>
+            <span style="font-weight: bold;">$${safeQuoteData.subtotal}</span>
           </div>
           <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-            <span>Markup (${quoteData.markup}%):</span>
-            <span style="font-weight: bold;">$${quoteData.markupAmount}</span>
+            <span>Markup (${safeQuoteData.markup}%):</span>
+            <span style="font-weight: bold;">$${safeQuoteData.markupAmount}</span>
           </div>
           <div style="display: flex; justify-content: space-between; font-size: 18px; font-weight: bold; border-top: 2px solid #ccc; padding-top: 10px;">
             <span>Total:</span>
-            <span style="color: #00d4ff;">$${quoteData.total}</span>
+            <span style="color: #00d4ff;">$${safeQuoteData.total}</span>
           </div>
         </div>
 
@@ -742,7 +921,7 @@ app.post('/api/email-quote', async (req, res) => {
 
         <div style="margin-top: 30px; padding: 20px; background-color: #f9f9f9; border-radius: 8px;">
           <h3 style="color: #333; margin-bottom: 10px;">Message:</h3>
-          <p style="color: #666; line-height: 1.6;">${message || 'Please find attached your detailed construction estimate.'}</p>
+          <p style="color: #666; line-height: 1.6;">${safeMessage}</p>
         </div>
       </div>
     `;
@@ -750,8 +929,8 @@ app.post('/api/email-quote', async (req, res) => {
     // Email options
     const mailOptions = {
       from: process.env.EMAIL_USER || 'AlphaQuote141@gmail.com',
-      to: recipient,
-      subject: subject,
+      to: safeRecipient,
+      subject: safeSubject,
       html: htmlContent
     };
 
@@ -770,7 +949,7 @@ app.post('/api/email-quote', async (req, res) => {
     // Log the action
     console.log(`✅ Quote emailed successfully to: ${recipient}`);
     console.log(`📧 Subject: ${subject}`);
-    console.log(`💰 Quote total: $${quoteData.total}`);
+    console.log(`💰 Quote total: $${safeQuoteData.total}`);
 
     res.json({ 
       success: true, 
@@ -789,7 +968,7 @@ app.post('/api/email-quote', async (req, res) => {
 });
 
 // Regional Price Pack Routes
-app.get('/api/regional-price-packs', async (req, res) => {
+app.get('/api/regional-price-packs', authenticateUser, async (req, res) => {
   try {
     const pricePacks = await prisma.regionalPricePack.findMany({
       where: { isActive: true },
@@ -809,7 +988,7 @@ app.get('/api/regional-price-packs', async (req, res) => {
   }
 });
 
-app.get('/api/regional-materials', async (req, res) => {
+app.get('/api/regional-materials', authenticateUser, async (req, res) => {
   try {
     const { region, category, search } = req.query;
     
@@ -857,7 +1036,7 @@ app.get('/api/regional-materials', async (req, res) => {
   }
 });
 
-app.get('/api/regional-materials/suggestions', async (req, res) => {
+app.get('/api/regional-materials/suggestions', authenticateUser, async (req, res) => {
   try {
     const { region, materialName, category } = req.query;
     
@@ -912,9 +1091,10 @@ app.get('/api/regional-materials/suggestions', async (req, res) => {
   }
 });
 
-app.post('/api/user-regional-selection', async (req, res) => {
+app.post('/api/user-regional-selection', authenticateUser, async (req, res) => {
   try {
-    const { userId, pricePackId } = req.body;
+    const { pricePackId } = req.body;
+    const userId = req.user.id; // Pass Two: identity comes from the verified token, never the request body
     
     if (!pricePackId) {
       return res.status(400).json({ success: false, error: 'Price pack ID is required' });
@@ -931,13 +1111,13 @@ app.post('/api/user-regional-selection', async (req, res) => {
 
     // Upsert user selection
     const userSelection = await prisma.userRegionalSelection.upsert({
-      where: { userId: userId || 'default' },
+      where: { userId },
       update: { 
         pricePackId: pricePackId,
         updatedAt: new Date()
       },
       create: {
-        userId: userId || 'default',
+        userId,
         pricePackId: pricePackId,
         isDefault: true
       },
@@ -955,12 +1135,12 @@ app.post('/api/user-regional-selection', async (req, res) => {
   }
 });
 
-app.get('/api/user-regional-selection', async (req, res) => {
+app.get('/api/user-regional-selection', authenticateUser, async (req, res) => {
   try {
-    const { userId } = req.query;
-    
+    const userId = req.user.id; // Pass Two: identity from the verified token, never the query string
+
     const userSelection = await prisma.userRegionalSelection.findUnique({
-      where: { userId: userId || 'default' },
+      where: { userId },
       include: {
         pricePack: {
           select: { name: true, region: true, description: true }
@@ -990,20 +1170,22 @@ app.get('/api/user-regional-selection', async (req, res) => {
 });
 
 // Task Template Routes
-app.get('/api/task-templates', async (req, res) => {
+app.get('/api/task-templates', requireTenantAuth, async (req, res) => {
   try {
-    const { category, userId } = req.query;
-    
-    const where = {
+    const { category } = req.query;
+
+    // Visible set (Pass Two): public templates plus the caller's own
+    const visibility = {
       OR: [
         { isPublic: true },
-        { userId: userId || 'default' }
+        { userId: req.user.id },
+        scopeWhere(req)
       ]
     };
-    
-    if (category) {
-      where.category = category;
-    }
+
+    const where = category
+      ? { AND: [visibility, { category }] }
+      : visibility;
 
     const templates = await prisma.taskTemplate.findMany({
       where,
@@ -1025,12 +1207,17 @@ app.get('/api/task-templates', async (req, res) => {
   }
 });
 
-app.get('/api/task-templates/:id', async (req, res) => {
+app.get('/api/task-templates/:id', requireTenantAuth, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const template = await prisma.taskTemplate.findUnique({
-      where: { id },
+    const template = await prisma.taskTemplate.findFirst({
+      where: {
+        AND: [
+          { id },
+          { OR: [{ isPublic: true }, { userId: req.user.id }, scopeWhere(req)] }
+        ]
+      },
       include: {
         tasks: {
           orderBy: { sortOrder: 'asc' }
@@ -1052,9 +1239,9 @@ app.get('/api/task-templates/:id', async (req, res) => {
   }
 });
 
-app.post('/api/task-templates', async (req, res) => {
+app.post('/api/task-templates', requireTenantAuth, async (req, res) => {
   try {
-    const { name, description, category, isPublic, userId, tasks } = req.body;
+    const { name, description, category, isPublic, tasks } = req.body;
 
     if (!name || name.trim() === '') {
       return res.status(400).json({ 
@@ -1078,7 +1265,9 @@ app.post('/api/task-templates', async (req, res) => {
           description: description?.trim(),
           category: category?.trim(),
           isPublic: Boolean(isPublic),
-          userId: userId || 'default'
+          userId: req.user.id,
+          contractorAccountId: req.tenantId,
+          createdById: req.dbUser.id
         }
       });
 
@@ -1114,10 +1303,20 @@ app.post('/api/task-templates', async (req, res) => {
   }
 });
 
-app.put('/api/task-templates/:id', async (req, res) => {
+app.put('/api/task-templates/:id', requireTenantAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, description, category, isPublic, tasks } = req.body;
+
+    const ownedTemplate = await prisma.taskTemplate.findFirst({
+      where: { AND: [{ id }, { OR: [{ userId: req.user.id }, scopeWhere(req)] }] }
+    });
+    if (!ownedTemplate) {
+      return res.status(404).json({
+        success: false,
+        error: 'Template not found'
+      });
+    }
 
     if (!name || name.trim() === '') {
       return res.status(400).json({ 
@@ -1183,9 +1382,19 @@ app.put('/api/task-templates/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/task-templates/:id', async (req, res) => {
+app.delete('/api/task-templates/:id', requireTenantAuth, async (req, res) => {
   try {
     const { id } = req.params;
+
+    const ownedTemplate = await prisma.taskTemplate.findFirst({
+      where: { AND: [{ id }, { OR: [{ userId: req.user.id }, scopeWhere(req)] }] }
+    });
+    if (!ownedTemplate) {
+      return res.status(404).json({
+        success: false,
+        error: 'Template not found'
+      });
+    }
 
     // Delete template (tasks will be deleted automatically due to cascade)
     await prisma.taskTemplate.delete({
@@ -1200,7 +1409,7 @@ app.delete('/api/task-templates/:id', async (req, res) => {
 });
 
 // Analytics Routes
-app.get('/api/analytics', async (req, res) => {
+app.get('/api/analytics', requireTenantAuth, async (req, res) => {
   try {
     const { period = '30days', vendor = 'all', category = 'all' } = req.query;
 
@@ -1227,19 +1436,26 @@ app.get('/api/analytics', async (req, res) => {
         break;
     }
 
-    // Build where conditions
-    const receiptWhere = {
-      receiptDate: {
-        gte: startDate,
-        lte: now
-      }
-    };
+    // Build where conditions (Pass Two: always tenant-scoped)
+    const receiptConditions = [
+      {
+        receiptDate: {
+          gte: startDate,
+          lte: now
+        }
+      },
+      scopeWhere(req)
+    ];
 
     if (vendor !== 'all') {
-      receiptWhere.vendor = {
-        name: vendor
-      };
+      receiptConditions.push({
+        vendor: {
+          name: vendor
+        }
+      });
     }
+
+    const receiptWhere = { AND: receiptConditions };
 
     // Get summary statistics
     const [
@@ -1252,8 +1468,8 @@ app.get('/api/analytics', async (req, res) => {
       estimates
     ] = await Promise.all([
       prisma.receipt.count({ where: receiptWhere }),
-      prisma.localVendor.count(),
-      prisma.project.count(),
+      prisma.localVendor.count({ where: scopeWhere(req) }),
+      prisma.project.count({ where: scopeWhere(req) }),
       prisma.receipt.findMany({
         where: receiptWhere,
         include: {
@@ -1263,6 +1479,7 @@ app.get('/api/analytics', async (req, res) => {
         orderBy: { receiptDate: 'desc' }
       }),
       prisma.localVendor.findMany({
+        where: scopeWhere(req),
         include: {
           receipts: {
             where: receiptWhere,
@@ -1273,10 +1490,15 @@ app.get('/api/analytics', async (req, res) => {
       }),
       prisma.project.findMany({
         where: {
-          createdAt: {
-            gte: startDate,
-            lte: now
-          }
+          AND: [
+            {
+              createdAt: {
+                gte: startDate,
+                lte: now
+              }
+            },
+            scopeWhere(req)
+          ]
         },
         include: {
           estimates: true,
@@ -1288,10 +1510,15 @@ app.get('/api/analytics', async (req, res) => {
       }),
       prisma.estimate.findMany({
         where: {
-          createdAt: {
-            gte: startDate,
-            lte: now
-          }
+          AND: [
+            {
+              createdAt: {
+                gte: startDate,
+                lte: now
+              }
+            },
+            scopeWhere(req)
+          ]
         },
         include: { project: true }
       })
@@ -1433,20 +1660,25 @@ app.get('/api/analytics', async (req, res) => {
 });
 
 // Follow-up Reminders Routes
-app.get('/api/followups', async (req, res) => {
+app.get('/api/followups', requireTenantAuth, async (req, res) => {
   try {
-    const { status, userId = 'default' } = req.query;
-    
-    const where = {
-      OR: [
-        { status: 'pending' },
-        { status: 'sent' }
-      ]
-    };
+    const { status } = req.query;
+
+    const conditions = [
+      {
+        OR: [
+          { status: 'pending' },
+          { status: 'sent' }
+        ]
+      },
+      scopeWhere(req)
+    ];
 
     if (status && status !== 'all') {
-      where.status = status;
+      conditions.push({ status });
     }
+
+    const where = { AND: conditions };
 
     const followUps = await prisma.followUpReminder.findMany({
       where,
@@ -1466,7 +1698,7 @@ app.get('/api/followups', async (req, res) => {
   }
 });
 
-app.post('/api/followups', async (req, res) => {
+app.post('/api/followups', requireTenantAuth, async (req, res) => {
   try {
     const { 
       projectId, 
@@ -1485,8 +1717,22 @@ app.post('/api/followups', async (req, res) => {
       });
     }
 
+    if (projectId) {
+      const ownedProject = await prisma.project.findFirst({
+        where: { AND: [{ id: projectId }, scopeWhere(req)] }
+      });
+      if (!ownedProject) {
+        return res.status(400).json({
+          success: false,
+          error: 'Project not found'
+        });
+      }
+    }
+
     const followUp = await prisma.followUpReminder.create({
       data: {
+        contractorAccountId: req.tenantId,
+        createdById: req.dbUser.id,
         projectId: projectId || null,
         clientEmail,
         clientName: clientName || null,
@@ -1508,10 +1754,17 @@ app.post('/api/followups', async (req, res) => {
   }
 });
 
-app.put('/api/followups/:id', async (req, res) => {
+app.put('/api/followups/:id', requireTenantAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { subject, message, scheduledDate, status } = req.body;
+
+    const ownedFollowUp = await prisma.followUpReminder.findFirst({
+      where: { AND: [{ id }, scopeWhere(req)] }
+    });
+    if (!ownedFollowUp) {
+      return res.status(404).json({ success: false, error: 'Follow-up not found' });
+    }
 
     const updateData = {};
     if (subject !== undefined) updateData.subject = subject;
@@ -1539,9 +1792,16 @@ app.put('/api/followups/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/followups/:id', async (req, res) => {
+app.delete('/api/followups/:id', requireTenantAuth, async (req, res) => {
   try {
     const { id } = req.params;
+
+    const ownedFollowUp = await prisma.followUpReminder.findFirst({
+      where: { AND: [{ id }, scopeWhere(req)] }
+    });
+    if (!ownedFollowUp) {
+      return res.status(404).json({ success: false, error: 'Follow-up not found' });
+    }
 
     await prisma.followUpReminder.delete({
       where: { id }
@@ -1555,15 +1815,14 @@ app.delete('/api/followups/:id', async (req, res) => {
 });
 
 // Follow-up Templates Routes
-app.get('/api/followup-templates', async (req, res) => {
+app.get('/api/followup-templates', requireTenantAuth, async (req, res) => {
   try {
-    const { userId = 'default' } = req.query;
-
     const templates = await prisma.followUpTemplate.findMany({
       where: {
         OR: [
-          { userId: userId },
-          { isDefault: true }
+          { userId: req.user.id },
+          { isDefault: true },
+          scopeWhere(req)
         ]
       },
       orderBy: [
@@ -1579,9 +1838,10 @@ app.get('/api/followup-templates', async (req, res) => {
   }
 });
 
-app.post('/api/followup-templates', async (req, res) => {
+app.post('/api/followup-templates', requireTenantAuth, async (req, res) => {
   try {
-    const { name, subject, message, isDefault, userId = 'default' } = req.body;
+    const { name, subject, message, isDefault } = req.body;
+    const userId = req.user.id;
 
     if (!name || !subject || !message) {
       return res.status(400).json({ 
@@ -1604,7 +1864,9 @@ app.post('/api/followup-templates', async (req, res) => {
         subject,
         message,
         isDefault: Boolean(isDefault),
-        userId
+        userId,
+        contractorAccountId: req.tenantId,
+        createdById: req.dbUser.id
       }
     });
 
@@ -1615,10 +1877,17 @@ app.post('/api/followup-templates', async (req, res) => {
   }
 });
 
-app.put('/api/followup-templates/:id', async (req, res) => {
+app.put('/api/followup-templates/:id', requireTenantAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, subject, message, isDefault } = req.body;
+
+    const ownedTemplate = await prisma.followUpTemplate.findFirst({
+      where: { AND: [{ id }, { OR: [{ userId: req.user.id }, scopeWhere(req)] }] }
+    });
+    if (!ownedTemplate) {
+      return res.status(404).json({ success: false, error: 'Template not found' });
+    }
 
     const updateData = {};
     if (name !== undefined) updateData.name = name;
@@ -1651,9 +1920,16 @@ app.put('/api/followup-templates/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/followup-templates/:id', async (req, res) => {
+app.delete('/api/followup-templates/:id', requireTenantAuth, async (req, res) => {
   try {
     const { id } = req.params;
+
+    const ownedTemplate = await prisma.followUpTemplate.findFirst({
+      where: { AND: [{ id }, { OR: [{ userId: req.user.id }, scopeWhere(req)] }] }
+    });
+    if (!ownedTemplate) {
+      return res.status(404).json({ success: false, error: 'Template not found' });
+    }
 
     await prisma.followUpTemplate.delete({
       where: { id }
@@ -1714,7 +1990,8 @@ app.use((error, req, res, next) => {
   });
 });
 
-// Start server
+// Start server (only when run directly, so tests can import the app)
+if (require.main === module) {
 app.listen(PORT, () => {
   console.log(`🚀 AlphaQuote API Server running on http://localhost:${PORT}`);
   console.log(`📋 Available endpoints:`);
@@ -1749,351 +2026,44 @@ app.listen(PORT, () => {
   console.log(`   POST   /api/followup-templates - Create follow-up template`);
   console.log(`   PUT    /api/followup-templates/:id - Update follow-up template`);
   console.log(`   DELETE /api/followup-templates/:id - Delete follow-up template`);
-  console.log(`   GET    /api/users         - List users`);
-  console.log(`   POST   /api/users         - Create user`);
-  console.log(`   PUT    /api/users/:id     - Update user`);
-  console.log(`   DELETE /api/users/:id     - Delete user`);
-  console.log(`   POST   /api/auth/login    - User login`);
-  console.log(`   POST   /api/auth/register - User registration`);
   console.log(`   GET    /api/health        - Health check`);
 });
+}
 
-// User Management Routes
-app.get('/api/users', async (req, res) => {
-  try {
-    const { contractorAccountId = 'default' } = req.query;
-    
-    // For now, use default contractor account
-    const contractorAccount = await prisma.contractorAccount.findFirst({
-      where: { email: 'default@alphaquote.local' }
-    });
-
-    if (!contractorAccount) {
-      return res.status(404).json({ success: false, error: 'Contractor account not found' });
-    }
-
-    const users = await prisma.user.findMany({
-      where: { contractorAccountId: contractorAccount.id },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        role: true,
-        isActive: true,
-        lastLogin: true,
-        createdAt: true,
-        updatedAt: true
-        // Don't include password
-      },
-      orderBy: [
-        { role: 'asc' }, // admin first
-        { firstName: 'asc' }
-      ]
-    });
-
-    res.json({ success: true, users });
-  } catch (error) {
-    console.error('Error fetching users:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.post('/api/users', async (req, res) => {
-  try {
-    const { email, firstName, lastName, password, role = 'viewer' } = req.body;
-
-    if (!email || !firstName || !lastName || !password) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Missing required fields: email, firstName, lastName, password' 
-      });
-    }
-
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email }
-    });
-
-    if (existingUser) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'User with this email already exists' 
-      });
-    }
-
-    // Get default contractor account
-    const contractorAccount = await prisma.contractorAccount.findFirst({
-      where: { email: 'default@alphaquote.local' }
-    });
-
-    if (!contractorAccount) {
-      return res.status(404).json({ success: false, error: 'Contractor account not found' });
-    }
-
-    // Hash password
-    const bcrypt = require('bcryptjs');
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const user = await prisma.user.create({
-      data: {
-        email,
-        firstName,
-        lastName,
-        password: hashedPassword,
-        role,
-        contractorAccountId: contractorAccount.id
-      },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        role: true,
-        isActive: true,
-        createdAt: true,
-        updatedAt: true
-      }
-    });
-
-    res.status(201).json({ success: true, user });
-  } catch (error) {
-    console.error('Error creating user:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.put('/api/users/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { firstName, lastName, role, isActive, password } = req.body;
-
-    const updateData = {};
-    if (firstName !== undefined) updateData.firstName = firstName;
-    if (lastName !== undefined) updateData.lastName = lastName;
-    if (role !== undefined) updateData.role = role;
-    if (isActive !== undefined) updateData.isActive = isActive;
-    if (password !== undefined && password.trim() !== '') {
-      const bcrypt = require('bcryptjs');
-      updateData.password = await bcrypt.hash(password, 10);
-    }
-
-    const user = await prisma.user.update({
-      where: { id },
-      data: updateData,
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        role: true,
-        isActive: true,
-        lastLogin: true,
-        createdAt: true,
-        updatedAt: true
-      }
-    });
-
-    res.json({ success: true, user });
-  } catch (error) {
-    console.error('Error updating user:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.delete('/api/users/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    // Check if this is the last admin user
-    const user = await prisma.user.findUnique({
-      where: { id },
-      include: { contractorAccount: true }
-    });
-
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
-    }
-
-    if (user.role === 'admin') {
-      const adminCount = await prisma.user.count({
-        where: { 
-          contractorAccountId: user.contractorAccountId,
-          role: 'admin',
-          isActive: true
-        }
-      });
-
-      if (adminCount <= 1) {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'Cannot delete the last admin user' 
-        });
-      }
-    }
-
-    await prisma.user.delete({
-      where: { id }
-    });
-
-    res.json({ success: true, message: 'User deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting user:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Authentication Routes
-app.post('/api/auth/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Email and password are required' 
-      });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { email },
-      include: { contractorAccount: true }
-    });
-
-    if (!user || !user.isActive) {
-      return res.status(401).json({ 
-        success: false, 
-        error: 'Invalid credentials' 
-      });
-    }
-
-    const bcrypt = require('bcryptjs');
-    const isValidPassword = await bcrypt.compare(password, user.password);
-
-    if (!isValidPassword) {
-      return res.status(401).json({ 
-        success: false, 
-        error: 'Invalid credentials' 
-      });
-    }
-
-    // Update last login
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { lastLogin: new Date() }
-    });
-
-    // Return user data (without password)
-    const userData = {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      role: user.role,
-      contractorAccount: {
-        id: user.contractorAccount.id,
-        name: user.contractorAccount.name
-      }
-    };
-
-    res.json({ success: true, user: userData });
-  } catch (error) {
-    console.error('Error during login:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.post('/api/auth/register', async (req, res) => {
-  try {
-    const { email, firstName, lastName, password, contractorName } = req.body;
-
-    if (!email || !firstName || !lastName || !password || !contractorName) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Missing required fields' 
-      });
-    }
-
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email }
-    });
-
-    if (existingUser) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'User with this email already exists' 
-      });
-    }
-
-    // Create contractor account
-    const contractorAccount = await prisma.contractorAccount.create({
-      data: {
-        name: contractorName,
-        email: email,
-        isActive: true
-      }
-    });
-
-    // Hash password
-    const bcrypt = require('bcryptjs');
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create admin user
-    const user = await prisma.user.create({
-      data: {
-        email,
-        firstName,
-        lastName,
-        password: hashedPassword,
-        role: 'admin',
-        contractorAccountId: contractorAccount.id
-      },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        role: true,
-        contractorAccount: {
-          select: {
-            id: true,
-            name: true
-          }
-        }
-      }
-    });
-
-    res.status(201).json({ success: true, user });
-  } catch (error) {
-    console.error('Error during registration:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+// Pass Two (lockdown): the legacy password-based account system that used
+// to live here — GET/POST /api/users, PUT/DELETE /api/users/:id, and
+// POST /api/auth/login|register — has been removed entirely. Clerk is the
+// only account system. (The Clerk-backed routes /api/users/sync|me|profile|
+// contractor-account|subscription remain near the top of this file.)
 
 // ==================== SCHEDULING API ENDPOINTS ====================
 
 // Get all scheduled jobs
-app.get('/api/scheduled-jobs', async (req, res) => {
+app.get('/api/scheduled-jobs', requireTenantAuth, async (req, res) => {
   try {
     const { startDate, endDate, status, priority } = req.query;
-    
-    const where = {};
-    
+
+    // Pass Two: results are always scoped to the caller's tenant
+    const conditions = [scopeWhere(req)];
+
     if (startDate && endDate) {
-      where.startDate = {
-        gte: new Date(startDate),
-        lte: new Date(endDate)
-      };
+      conditions.push({
+        startDate: {
+          gte: new Date(startDate),
+          lte: new Date(endDate)
+        }
+      });
     }
-    
+
     if (status && status !== 'all') {
-      where.status = status;
+      conditions.push({ status });
     }
-    
+
     if (priority && priority !== 'all') {
-      where.priority = priority;
+      conditions.push({ priority });
     }
+
+    const where = { AND: conditions };
 
     const jobs = await prisma.scheduledJob.findMany({
       where,
@@ -2113,12 +2083,12 @@ app.get('/api/scheduled-jobs', async (req, res) => {
 });
 
 // Get scheduled job by ID
-app.get('/api/scheduled-jobs/:id', async (req, res) => {
+app.get('/api/scheduled-jobs/:id', requireTenantAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    
-    const job = await prisma.scheduledJob.findUnique({
-      where: { id },
+
+    const job = await prisma.scheduledJob.findFirst({
+      where: { AND: [{ id }, scopeWhere(req)] },
       include: {
         project: true,
         estimate: true,
@@ -2138,7 +2108,7 @@ app.get('/api/scheduled-jobs/:id', async (req, res) => {
 });
 
 // Create new scheduled job
-app.post('/api/scheduled-jobs', async (req, res) => {
+app.post('/api/scheduled-jobs', requireTenantAuth, async (req, res) => {
   try {
     const {
       title,
@@ -2173,18 +2143,6 @@ app.post('/api/scheduled-jobs', async (req, res) => {
       });
     }
 
-    // Get default contractor account (for now)
-    const defaultContractor = await prisma.contractorAccount.findFirst({
-      where: { email: 'default@alphaquote.local' }
-    });
-
-    if (!defaultContractor) {
-      return res.status(400).json({
-        success: false,
-        error: 'No contractor account found'
-      });
-    }
-
     const job = await prisma.scheduledJob.create({
       data: {
         title: title.trim(),
@@ -2202,7 +2160,8 @@ app.post('/api/scheduled-jobs', async (req, res) => {
         isRecurring,
         recurrenceRule,
         recurrenceEnd: recurrenceEnd ? new Date(recurrenceEnd) : null,
-        contractorAccountId: defaultContractor.id
+        contractorAccountId: req.tenantId,
+        createdById: req.dbUser.id
       },
       include: {
         project: true,
@@ -2219,10 +2178,22 @@ app.post('/api/scheduled-jobs', async (req, res) => {
 });
 
 // Update scheduled job
-app.put('/api/scheduled-jobs/:id', async (req, res) => {
+app.put('/api/scheduled-jobs/:id', requireTenantAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
+
+    const ownedJob = await prisma.scheduledJob.findFirst({
+      where: { AND: [{ id }, scopeWhere(req)] }
+    });
+    if (!ownedJob) {
+      return res.status(404).json({ success: false, error: 'Job not found' });
+    }
+
+    const updateData = { ...req.body };
+    // Ownership fields are never client-writable (Pass Two)
+    delete updateData.id;
+    delete updateData.contractorAccountId;
+    delete updateData.createdById;
 
     // Convert date strings to Date objects if present
     if (updateData.startDate) {
@@ -2253,9 +2224,16 @@ app.put('/api/scheduled-jobs/:id', async (req, res) => {
 });
 
 // Delete scheduled job
-app.delete('/api/scheduled-jobs/:id', async (req, res) => {
+app.delete('/api/scheduled-jobs/:id', requireTenantAuth, async (req, res) => {
   try {
     const { id } = req.params;
+
+    const ownedJob = await prisma.scheduledJob.findFirst({
+      where: { AND: [{ id }, scopeWhere(req)] }
+    });
+    if (!ownedJob) {
+      return res.status(404).json({ success: false, error: 'Job not found' });
+    }
 
     await prisma.scheduledJob.delete({
       where: { id }
@@ -2269,12 +2247,12 @@ app.delete('/api/scheduled-jobs/:id', async (req, res) => {
 });
 
 // Sync job to calendar
-app.post('/api/scheduled-jobs/:id/sync', async (req, res) => {
+app.post('/api/scheduled-jobs/:id/sync', requireTenantAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    
-    const job = await prisma.scheduledJob.findUnique({
-      where: { id },
+
+    const job = await prisma.scheduledJob.findFirst({
+      where: { AND: [{ id }, scopeWhere(req)] },
       include: {
         project: true,
         estimate: true
@@ -2303,10 +2281,17 @@ app.post('/api/scheduled-jobs/:id/sync', async (req, res) => {
 });
 
 // Remove job from calendar
-app.delete('/api/scheduled-jobs/:id/sync', async (req, res) => {
+app.delete('/api/scheduled-jobs/:id/sync', requireTenantAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    
+
+    const ownedJob = await prisma.scheduledJob.findFirst({
+      where: { AND: [{ id }, scopeWhere(req)] }
+    });
+    if (!ownedJob) {
+      return res.status(404).json({ success: false, error: 'Job not found' });
+    }
+
     // For now, just update sync status
     const updatedJob = await prisma.scheduledJob.update({
       where: { id },
@@ -2325,32 +2310,25 @@ app.delete('/api/scheduled-jobs/:id/sync', async (req, res) => {
 });
 
 // Get job statistics
-app.get('/api/scheduled-jobs/statistics', async (req, res) => {
+app.get('/api/scheduled-jobs/statistics', requireTenantAuth, async (req, res) => {
   try {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfWeek = new Date(now.getTime() - (now.getDay() * 24 * 60 * 60 * 1000));
 
+    const scope = scopeWhere(req);
     const [totalJobs, inProgress, completed, overdue] = await Promise.all([
       prisma.scheduledJob.count({
-        where: {
-          startDate: { gte: startOfMonth }
-        }
+        where: { AND: [{ startDate: { gte: startOfMonth } }, scope] }
       }),
       prisma.scheduledJob.count({
-        where: { status: 'in_progress' }
+        where: { AND: [{ status: 'in_progress' }, scope] }
       }),
       prisma.scheduledJob.count({
-        where: {
-          status: 'completed',
-          endDate: { gte: startOfWeek }
-        }
+        where: { AND: [{ status: 'completed', endDate: { gte: startOfWeek } }, scope] }
       }),
       prisma.scheduledJob.count({
-        where: {
-          status: { not: 'completed' },
-          endDate: { lt: now }
-        }
+        where: { AND: [{ status: { not: 'completed' }, endDate: { lt: now } }, scope] }
       })
     ]);
 
@@ -2370,29 +2348,17 @@ app.get('/api/scheduled-jobs/statistics', async (req, res) => {
 });
 
 // Get calendar sync settings
-app.get('/api/calendar-sync-settings', async (req, res) => {
+app.get('/api/calendar-sync-settings', requireTenantAuth, async (req, res) => {
   try {
-    // Get default contractor account
-    const defaultContractor = await prisma.contractorAccount.findFirst({
-      where: { email: 'default@alphaquote.local' }
-    });
-
-    if (!defaultContractor) {
-      return res.status(400).json({
-        success: false,
-        error: 'No contractor account found'
-      });
-    }
-
     let settings = await prisma.calendarSyncSettings.findFirst({
-      where: { contractorAccountId: defaultContractor.id }
+      where: { contractorAccountId: req.tenantId }
     });
 
     // Create default settings if none exist
     if (!settings) {
       settings = await prisma.calendarSyncSettings.create({
         data: {
-          contractorAccountId: defaultContractor.id
+          contractorAccountId: req.tenantId
         }
       });
     }
@@ -2405,24 +2371,15 @@ app.get('/api/calendar-sync-settings', async (req, res) => {
 });
 
 // Update calendar sync settings
-app.put('/api/calendar-sync-settings', async (req, res) => {
+app.put('/api/calendar-sync-settings', requireTenantAuth, async (req, res) => {
   try {
-    const settingsData = req.body;
-
-    // Get default contractor account
-    const defaultContractor = await prisma.contractorAccount.findFirst({
-      where: { email: 'default@alphaquote.local' }
-    });
-
-    if (!defaultContractor) {
-      return res.status(400).json({
-        success: false,
-        error: 'No contractor account found'
-      });
-    }
+    const settingsData = { ...req.body };
+    // Ownership fields are never client-writable (Pass Two)
+    delete settingsData.id;
+    delete settingsData.contractorAccountId;
 
     let settings = await prisma.calendarSyncSettings.findFirst({
-      where: { contractorAccountId: defaultContractor.id }
+      where: { contractorAccountId: req.tenantId }
     });
 
     if (settings) {
@@ -2434,7 +2391,7 @@ app.put('/api/calendar-sync-settings', async (req, res) => {
       settings = await prisma.calendarSyncSettings.create({
         data: {
           ...settingsData,
-          contractorAccountId: defaultContractor.id
+          contractorAccountId: req.tenantId
         }
       });
     }

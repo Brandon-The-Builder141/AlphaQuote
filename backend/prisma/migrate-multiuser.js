@@ -35,7 +35,16 @@ async function migrateToMultiUser() {
 
     // 2. Create default admin user
     console.log('👤 Creating default admin user...');
-    const hashedPassword = await bcrypt.hash('admin123', 10);
+    // Pass Two: the default admin password previously sat in this script
+    // as a hardcoded, easily-guessed literal. It now comes from the
+    // environment, and the script refuses to run without it.
+    const adminPassword = process.env.DEFAULT_ADMIN_PASSWORD;
+    if (!adminPassword) {
+      console.error('❌ DEFAULT_ADMIN_PASSWORD environment variable is required to create the default admin user.');
+      console.error('   Set it to a strong password before running this migration script.');
+      process.exit(1);
+    }
+    const hashedPassword = await bcrypt.hash(adminPassword, 10);
     const defaultUser = await prisma.user.upsert({
       where: { email: 'admin@alphaquote.local' },
       update: {},
