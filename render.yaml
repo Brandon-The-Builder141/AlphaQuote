@@ -38,9 +38,12 @@ services:
         sync: false
 
   # Web — Create React App build served as a static site.
-  - type: static
+  # Blueprint spec: static sites are type "web" + runtime "static", and
+  # the plan field is NOT supported for them (no compute plan) — omitting
+  # it is what makes this service free.
+  - type: web
     name: alphaquote-web
-    plan: free
+    runtime: static
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: frontend/build
     envVars:
