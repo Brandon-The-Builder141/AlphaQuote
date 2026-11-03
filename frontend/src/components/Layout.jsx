@@ -14,19 +14,25 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
-  LayoutTemplate
+  LayoutTemplate,
+  Target,
+  ListChecks
 } from 'lucide-react';
 import { useAuth } from '@clerk/clerk-react';
 import { COMPANY_NAME } from '../config/site';
 
-// Pass Eight (IRON shell): same navigation, routes, module gating and
-// sign-out behavior as before — only the chrome changed. Blackened-steel
-// sidebar with the IL monogram on desktop; on phones the sidebar gives
-// way to a top bar + bottom tab bar (Brandon runs this from his iPhone).
+// Pass Nine (Command Center): the nav matches the one-man operation now.
+// Primary = Command, Quotes, Leads, Queue, Receipts. Everything else
+// (Vendors, Templates, Follow-Ups, Scheduling, Analytics, Accounting,
+// Profile) sits under "More". No demo links anywhere — the demo surface
+// is gone. Desktop keeps the blackened-steel sidebar with the IL
+// monogram; phones get the top bar + bottom tab bar.
 const PAGE_TITLES = [
   ['/estimate/advanced', 'Advanced Estimator'],
-  ['/estimate', 'New Estimate'],
+  ['/estimate', 'Quotes'],
   ['/result', 'Estimate Result'],
+  ['/leads', 'Lead Board'],
+  ['/queue', 'Approval Queue'],
   ['/receipts', 'Receipts'],
   ['/vendors', 'Vendors'],
   ['/projects', 'Project Budget'],
@@ -36,13 +42,13 @@ const PAGE_TITLES = [
   ['/scheduling', 'Scheduling'],
   ['/profile', 'Profile'],
   ['/offline', 'Offline Mode'],
-  ['/dashboard', 'Dashboard'],
-  ['/', 'Dashboard']
+  ['/dashboard', 'Command'],
+  ['/', 'Command']
 ];
 
 function pageTitle(pathname) {
   const match = PAGE_TITLES.find(([prefix]) => prefix !== '/' && pathname.startsWith(prefix));
-  return match ? match[1] : 'Dashboard';
+  return match ? match[1] : 'Command';
 }
 
 export default function Layout({ children }) {
@@ -52,25 +58,36 @@ export default function Layout({ children }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [enabledModules] = useState(getEnabledModules());
 
-  const navigationItems = [
-    { icon: Home, label: 'Dashboard', path: '/', alwaysShow: true },
-    { icon: Calculator, label: 'New Estimate', path: '/estimate', alwaysShow: true },
-    { icon: Receipt, label: 'Receipts', path: '/receipts', alwaysShow: true },
+  const primaryItems = [
+    { icon: Home, label: 'Command', path: '/dashboard', alwaysShow: true },
+    { icon: Calculator, label: 'Quotes', path: '/estimate', alwaysShow: true },
+    { icon: Target, label: 'Leads', path: '/leads', alwaysShow: true },
+    { icon: ListChecks, label: 'Queue', path: '/queue', alwaysShow: true },
+    { icon: Receipt, label: 'Receipts', path: '/receipts', alwaysShow: true }
+  ];
+
+  const moreItems = [
     { icon: Store, label: 'Vendors', path: '/vendors', module: 'vendorManagement' },
-    { icon: BarChart3, label: 'Analytics', path: '/analytics', alwaysShow: true },
+    { icon: LayoutTemplate, label: 'Templates', path: '/estimate/advanced', alwaysShow: true },
     { icon: Mail, label: 'Follow-Ups', path: '/followups', alwaysShow: true },
-    { icon: Download, label: 'Accounting', path: '/accounting', alwaysShow: true },
     { icon: Calendar, label: 'Scheduling', path: '/scheduling', alwaysShow: true },
+    { icon: BarChart3, label: 'Analytics', path: '/analytics', alwaysShow: true },
+    { icon: Download, label: 'Accounting', path: '/accounting', alwaysShow: true },
     { icon: Settings, label: 'Profile', path: '/profile', alwaysShow: true }
   ];
 
-  const visibleItems = navigationItems.filter(item =>
-    item.alwaysShow || (item.module && enabledModules[item.module])
-  );
+  const isVisible = (item) =>
+    item.alwaysShow || (item.module && enabledModules[item.module]);
 
   const isActive = (path) => {
-    if (path === '/') {
-      return location.pathname === '/' || location.pathname === '/dashboard';
+    if (path === '/dashboard') {
+      return location.pathname === '/' || location.pathname.startsWith('/dashboard');
+    }
+    if (path === '/estimate') {
+      return location.pathname === '/estimate' || location.pathname === '/result';
+    }
+    if (path === '/estimate/advanced') {
+      return location.pathname.startsWith('/estimate/advanced');
     }
     return location.pathname.startsWith(path);
   };
@@ -80,28 +97,32 @@ export default function Layout({ children }) {
     navigate('/sign-in');
   };
 
-  // Bottom tab bar (mobile primary nav). "Templates" lives inside the
-  // advanced estimator, so its tab points at /estimate/advanced.
+  // Bottom tab bar (mobile primary nav) — the five primary surfaces.
   const tabItems = [
-    { icon: Home, label: 'Dashboard', path: '/', active: isActive('/') },
-    {
-      icon: Calculator,
-      label: 'Estimates',
-      path: '/estimate',
-      active: location.pathname === '/estimate' || location.pathname === '/result'
-    },
-    {
-      icon: LayoutTemplate,
-      label: 'Templates',
-      path: '/estimate/advanced',
-      active: location.pathname.startsWith('/estimate/advanced')
-    },
-    { icon: Store, label: 'Vendors', path: '/vendors', active: isActive('/vendors') },
-    { icon: Receipt, label: 'Receipts', path: '/receipts', active: isActive('/receipts') },
-    { icon: Settings, label: 'Profile', path: '/profile', active: isActive('/profile') }
+    { icon: Home, label: 'Command', path: '/dashboard', active: isActive('/dashboard') },
+    { icon: Calculator, label: 'Quotes', path: '/estimate', active: isActive('/estimate') },
+    { icon: Target, label: 'Leads', path: '/leads', active: isActive('/leads') },
+    { icon: ListChecks, label: 'Queue', path: '/queue', active: isActive('/queue') },
+    { icon: Receipt, label: 'Receipts', path: '/receipts', active: isActive('/receipts') }
   ];
 
   const title = pageTitle(location.pathname);
+
+  const renderNavItem = (item) => {
+    const Icon = item.icon;
+    const active = isActive(item.path);
+    return (
+      <button
+        key={item.path}
+        onClick={() => navigate(item.path)}
+        className={`nav-link ${active ? 'active' : ''}`}
+        title={isCollapsed ? item.label : undefined}
+      >
+        <Icon className="w-5 h-5 flex-none" />
+        {!isCollapsed && <span className="truncate">{item.label}</span>}
+      </button>
+    );
+  };
 
   return (
     <div className="iron-bg min-h-screen text-slate-100 font-body">
@@ -132,21 +153,16 @@ export default function Layout({ children }) {
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-5 px-4">
           <div className="space-y-1.5">
-            {visibleItems.map((item) => {
-              const Icon = item.icon;
-              const active = isActive(item.path);
-              return (
-                <button
-                  key={item.path}
-                  onClick={() => navigate(item.path)}
-                  className={`nav-link ${active ? 'active' : ''}`}
-                  title={isCollapsed ? item.label : undefined}
-                >
-                  <Icon className="w-5 h-5 flex-none" />
-                  {!isCollapsed && <span className="truncate">{item.label}</span>}
-                </button>
-              );
-            })}
+            {primaryItems.filter(isVisible).map(renderNavItem)}
+          </div>
+          {!isCollapsed && (
+            <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-slate-500 mt-6 mb-2 px-1">
+              More
+            </p>
+          )}
+          {isCollapsed && <div className="border-t border-slate-700 my-4"></div>}
+          <div className="space-y-1.5">
+            {moreItems.filter(isVisible).map(renderNavItem)}
           </div>
         </nav>
 

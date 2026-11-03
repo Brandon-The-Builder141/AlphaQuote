@@ -364,3 +364,56 @@ changes (`git diff` touches nothing under `frontend/src/services/` or
   by-email fallback (tenant.js) never fires for real tokens (the
   clerkId path carries it). Both want a session-token/profile decision
   of their own, not a ride on this hotfix.
+
+## Pass Nine — Command Center (2026-11-03, branch `pass9-command-center`)
+
+- **Vision (Brandon, confirmed verbatim 5:33 PM):** one user, ever —
+  this is Brandon's command center for Iron Legion, not SaaS for other
+  contractors. He approves; Solen operates. The engine does not change.
+- **A — stranger surfaces killed:** signed-out `/` is now a minimal
+  IRON sign-in gate (IL monogram, "Iron Legion Contracting",
+  "BUILT RIGHT. QUOTED STRAIGHT.", the Clerk control) — `SignInGate`.
+  Deleted: the marketing landing, the Pricing page + plan config,
+  the Demo page, the old StartEstimate dashboard (it carried the demo
+  button and the "Upgrade to Pro" footer), `ProFeatureGate` (its two
+  EstimateResult usages now render directly — PDF/accounting export
+  are just his buttons), and the old SignIn page. `/demo` and
+  `/pricing` redirect to `/dashboard`, like the retired setup routes.
+  Backend subscription endpoints remain, unlinked.
+- **B — Command home (`/dashboard` → `Command`):** TODAY card
+  (must-win + Daily Brick, inline edit) backed by new `DayCard` model
+  + `GET/PUT /api/ops/day`; BUSINESS strip from new
+  `GET /api/ops/summary` (quotes out on still-active projects,
+  follow-ups due, receipts this month, jobs today); LEADS preview
+  (newest 5 `new` leads, tap-to-call); QUEUE preview (queued count +
+  top 3); his numbers as a compact strip from `pricingConstants`.
+- **C — Lead Board:** `Lead` model + tenant-scoped CRUD at
+  `/api/leads`. Seeded from `backend/config/leadSeed.json` (Defiance
+  County auditor sales): 34 source records → **32 seeded** (two
+  parcels were recorded twice with buyer-name variants; parcelId is
+  the unique dedupe key), **8 with phone numbers** (phones.json joined
+  on address + buyer with the " TOD" suffix reconciled; the
+  "current"-labeled number wins). `ensureLeads()` self-seeds a
+  tenant's first list, count-guarded like the starter templates.
+- **D — Approval queue:** `OpsItem` model + `/api/ops/items`.
+  Seeds ZERO items, by design — the empty state is Brandon's copy:
+  "Nothing waiting. When Solen drafts follow-ups, ads, or lead scans,
+  they land here for your thumbs-up."
+- **E — Nav:** primary Command / Quotes / Leads / Queue / Receipts
+  (sidebar + mobile tab bar); Vendors, Templates, Follow-Ups,
+  Scheduling, Analytics, Accounting, Profile under "More".
+- **Schema/migration:** `Lead`, `OpsItem`, `DayCard` added to both
+  Prisma schemas; Postgres migration
+  `20261103180000_pass9_command_center` (runs via `migrate deploy`
+  on boot, like every pass).
+- **Tests: 84/84 passing** (72 baseline + 12 new in
+  `pass9-command-center.test.js`: seed counts + idempotency, lead CRUD
+  + validation, queue empty-start + lifecycle, day-card upsert,
+  summary aggregates, and cross-tenant isolation for all three new
+  modules). Frontend production build passes.
+- **Demo residue (flagged, unreachable):** `pages/DemoMode.jsx` is
+  deleted and no route or link reaches a demo, but demo internals
+  remain in the engine room: `utils/demoData.js` (imported by
+  `EstimateForm.js`), `authService` demo-mode helpers, and
+  demo-fixture branches in a few services. Removing them is a
+  cleanup-pass candidate, not this pass.

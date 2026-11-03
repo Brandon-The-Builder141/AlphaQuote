@@ -7,7 +7,10 @@ import ClerkProviderWrapper from './components/ClerkProvider';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import { validateEnv, logConfig } from './config/env';
-import StartEstimate from './StartEstimate';
+import Command from './pages/Command';
+import Leads from './pages/Leads';
+import Queue from './pages/Queue';
+import SignInGate from './pages/SignInGate';
 import EstimateForm from './EstimateForm';
 import AlphaQuoteWizard from './components/AlphaQuoteWizard';
 import EstimateResult from './EstimateResult';
@@ -27,17 +30,13 @@ import ReceiptParserTest from './components/ReceiptParserTest';
 import OfflineMode from './components/OfflineMode';
 import AccountingIntegration from './pages/AccountingIntegration';
 import JobScheduling from './pages/JobScheduling';
-import SignIn from './pages/SignIn';
 import SignUp from './pages/SignUp';
-import DemoMode from './pages/DemoMode';
-import Pricing from './pages/Pricing';
-import Landing from './pages/Landing';
 import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
 
 /**
- * Root route: signed-in users get the app (unchanged behavior);
- * logged-out visitors get the public landing page.
+ * Root route: signed-in users get the Command Center; logged-out
+ * visitors get the sign-in gate (Pass Nine — no public landing page).
  */
 function RootRoute() {
   const { isSignedIn, isLoaded } = useAuth();
@@ -51,7 +50,7 @@ function RootRoute() {
   const appHome = (
     <ProtectedRoute>
       <Layout>
-        <StartEstimate />
+        <Command />
       </Layout>
     </ProtectedRoute>
   );
@@ -70,7 +69,9 @@ function RootRoute() {
     );
   }
 
-  return isSignedIn ? appHome : <Landing />;
+  // Pass Nine: there is no public landing page anymore. Signed out
+  // means the sign-in gate — this app has exactly one operator.
+  return isSignedIn ? appHome : <SignInGate />;
 }
 
 function App() {
@@ -123,10 +124,11 @@ function App() {
         <Routes>
           {/* Public Routes */}
           <Route path="/" element={<RootRoute />} />
-          <Route path="/sign-in" element={<SignIn />} />
+          <Route path="/sign-in" element={<SignInGate />} />
           <Route path="/sign-up" element={<SignUp />} />
-          <Route path="/demo" element={<DemoMode />} />
-          <Route path="/pricing" element={<Pricing />} />
+          {/* Pass Nine: demo + pricing surfaces are gone for good. */}
+          <Route path="/demo" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/pricing" element={<Navigate to="/dashboard" replace />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/profile-setup" element={<Navigate to="/dashboard" replace />} />
@@ -135,7 +137,21 @@ function App() {
           <Route path="/dashboard" element={
             <ProtectedRoute>
               <Layout>
-                <StartEstimate />
+                <Command />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/leads" element={
+            <ProtectedRoute>
+              <Layout>
+                <Leads />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/queue" element={
+            <ProtectedRoute>
+              <Layout>
+                <Queue />
               </Layout>
             </ProtectedRoute>
           } />

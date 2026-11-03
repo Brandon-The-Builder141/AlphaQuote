@@ -10,7 +10,6 @@ import {
   Loader
 } from 'lucide-react';
 import ExportButton from './components/ExportButton';
-import ProFeatureGate from './components/ProFeatureGate';
 import { generateQuotePDF } from './utils/pdfService';
 import { showSuccess, showError } from './utils/toastService';
 
@@ -355,10 +354,7 @@ export default function EstimateResult() {
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-6">
-            <ProFeatureGate
-              feature="PDF export with custom branding"
-              className="flex-1"
-            >
+            <div className="flex-1">
               <motion.button
                 onClick={handleDownloadPDF}
                 disabled={isGeneratingPDF}
@@ -379,12 +375,9 @@ export default function EstimateResult() {
                   </>
                 )}
               </motion.button>
-            </ProFeatureGate>
+            </div>
 
-            <ProFeatureGate
-              feature="Data export to accounting software"
-              className="flex-1"
-            >
+            <div className="flex-1">
               <ExportButton
                 data={{
                   id: `quote_${Date.now()}`,
@@ -407,7 +400,7 @@ export default function EstimateResult() {
                 variant="secondary"
                 className="w-full"
               />
-            </ProFeatureGate>
+            </div>
 
             <motion.button
               onClick={() => navigate('/')}

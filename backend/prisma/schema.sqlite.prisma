@@ -352,6 +352,9 @@ model ContractorAccount {
   scheduledJobs ScheduledJob[]
   scheduledJobReminders ScheduledJobReminder[]
   calendarSyncSettings CalendarSyncSettings[]
+  leads       Lead[]
+  opsItems    OpsItem[]
+  dayCards    DayCard[]
 }
 
 // User accounts within contractor accounts
@@ -381,6 +384,9 @@ model User {
   createdFollowUpTemplates FollowUpTemplate[]
   createdTaskTemplates TaskTemplate[]
   createdScheduledJobs ScheduledJob[]
+  createdLeads        Lead[]
+  createdOpsItems     OpsItem[]
+  createdDayCards     DayCard[]
 }
 
 // Project and Estimate models already defined above
@@ -480,4 +486,74 @@ model CalendarSyncSettings {
   // Multi-user relationships
   contractorAccount   ContractorAccount? @relation(fields: [contractorAccountId], references: [id], onDelete: Cascade)
   contractorAccountId String?
+}
+
+// Pass Nine (Command Center): the Lead Board. Homeowner leads sourced
+// from county auditor sale records (seeded once per tenant from
+// backend/config/leadSeed.json) plus any leads added by hand. Status
+// walks the call pipeline: new -> calling -> quoted -> won / dead.
+model Lead {
+  id          String   @id @default(cuid())
+  name        String   // buyer name from the sale record
+  address     String   // property address
+  city        String
+  phone       String?
+  saleDate    DateTime?
+  salePrice   Decimal?
+  acres       Float?
+  parcelId    String?  // auditor parcel id; dedupe key, unique per tenant
+  source      String   @default("Auditor sales")
+  status      String   @default("new") // new, calling, quoted, won, dead
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Multi-user relationships
+  contractorAccount   ContractorAccount? @relation(fields: [contractorAccountId], references: [id], onDelete: Cascade)
+  contractorAccountId String?
+  createdBy           User?              @relation(fields: [createdById], references: [id])
+  createdById         String?
+
+  @@unique([contractorAccountId, parcelId])
+}
+
+// Pass Nine (Command Center): the approval queue. Work Solen produces
+// (follow-up drafts, ad copy, lead scans, price checks, notes) lands
+// here as queued items; nothing customer-facing leaves without Brandon
+// moving an item past queued. Status: queued -> approved -> done, or
+// dismissed from anywhere.
+model OpsItem {
+  id        String   @id @default(cuid())
+  kind      String   // followup, ad, lead-scan, price-check, note
+  title     String
+  body      String
+  status    String   @default("queued") // queued, approved, dismissed, done
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Multi-user relationships
+  contractorAccount   ContractorAccount? @relation(fields: [contractorAccountId], references: [id], onDelete: Cascade)
+  contractorAccountId String?
+  createdBy           User?              @relation(fields: [createdById], references: [id])
+  createdById         String?
+}
+
+// Pass Nine (Command Center): the Today card on the command home — one
+// row per tenant per day holding the morning flow's must-win and the
+// Daily Brick. `date` is the operator's local day, YYYY-MM-DD.
+model DayCard {
+  id        String   @id @default(cuid())
+  date      String   // YYYY-MM-DD (operator-local)
+  mustWin   String   @default("")
+  brick     String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Multi-user relationships
+  contractorAccount   ContractorAccount? @relation(fields: [contractorAccountId], references: [id], onDelete: Cascade)
+  contractorAccountId String?
+  createdBy           User?              @relation(fields: [createdById], references: [id])
+  createdById         String?
+
+  @@unique([contractorAccountId, date])
 }

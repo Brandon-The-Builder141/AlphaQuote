@@ -119,7 +119,6 @@ const Privacy = () => (
 
       <footer className="border-t border-slate-800/60 pt-6 mt-12 flex gap-6 text-sm text-slate-400">
         <Link to="/" className="hover:text-white">Home</Link>
-        <Link to="/pricing" className="hover:text-white">Pricing</Link>
         <Link to="/terms" className="hover:text-white">Terms of Service</Link>
       </footer>
     </div>

@@ -3047,4 +3047,394 @@ app.put('/api/calendar-sync-settings', requireTenantAuth, async (req, res) => {
   }
 });
 
+// ==================== PASS NINE — COMMAND CENTER ====================
+// The shell is now a one-man command center for Iron Legion: a Lead
+// Board, an approval queue for agent-produced work, the Today card
+// (must-win + Daily Brick from the morning flow), and one summary
+// endpoint that feeds the command home. Everything below is
+// tenant-scoped like every other data route (Pass Two rules).
+
+const leadSeed = require('../config/leadSeed.json');
+
+const LEAD_STATUSES = ['new', 'calling', 'quoted', 'won', 'dead'];
+const OPS_KINDS = ['followup', 'ad', 'lead-scan', 'price-check', 'note'];
+const OPS_STATUSES = ['queued', 'approved', 'dismissed', 'done'];
+
+// The lead library self-populates lazily, same count-guarded pattern as
+// the starter templates (Pass Five): the first lead-list request from a
+// tenant with zero leads creates the board from config, keyed per
+// tenant so concurrent first loads cannot double-seed. parcelId is the
+// dedupe key (unique per tenant in the schema).
+const leadSeedPromises = new Map();
+function ensureLeads(req) {
+  const tenantId = req.tenantId;
+  if (!leadSeedPromises.has(tenantId)) {
+    const promise = (async () => {
+      const existing = await prisma.lead.count({
+        where: { contractorAccountId: tenantId }
+      });
+      if (existing > 0) return;
+      for (const lead of leadSeed) {
+        await prisma.lead.create({
+          data: {
+            name: lead.name,
+            address: lead.address,
+            city: lead.city,
+            phone: lead.phone || null,
+            saleDate: lead.saleDate ? new Date(lead.saleDate) : null,
+            salePrice: lead.salePrice,
+            acres: lead.acres,
+            parcelId: lead.parcelId,
+            source: lead.source || 'Auditor sales',
+            contractorAccountId: tenantId,
+            createdById: req.dbUser.id
+          }
+        });
+      }
+      console.log(`🎯 Lead board seeded (${leadSeed.length} auditor-sale leads)`);
+    })().catch((error) => {
+      console.error('Lead seed failed:', error.message);
+      leadSeedPromises.delete(tenantId);
+    });
+    leadSeedPromises.set(tenantId, promise);
+  }
+  return leadSeedPromises.get(tenantId);
+}
+
+app.get('/api/leads', requireTenantAuth, async (req, res) => {
+  try {
+    await ensureLeads(req);
+    const { status } = req.query;
+    const conditions = [scopeWhere(req)];
+    if (status && status !== 'all') {
+      if (!LEAD_STATUSES.includes(status)) {
+        return res.status(400).json({ success: false, error: 'Invalid lead status' });
+      }
+      conditions.push({ status });
+    }
+    const leads = await prisma.lead.findMany({
+      where: { AND: conditions },
+      orderBy: [{ saleDate: 'desc' }, { createdAt: 'desc' }]
+    });
+    res.json({ success: true, leads });
+  } catch (error) {
+    console.error('Error fetching leads:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/leads/:id', requireTenantAuth, async (req, res) => {
+  try {
+    const lead = await prisma.lead.findFirst({
+      where: { AND: [{ id: req.params.id }, scopeWhere(req)] }
+    });
+    if (!lead) {
+      return res.status(404).json({ success: false, error: 'Lead not found' });
+    }
+    res.json({ success: true, lead });
+  } catch (error) {
+    console.error('Error fetching lead:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/leads', requireTenantAuth, async (req, res) => {
+  try {
+    const { name, address, city, phone, saleDate, salePrice, acres, parcelId, source, status, notes } = req.body || {};
+    if (!name || !String(name).trim() || !address || !String(address).trim()) {
+      return res.status(400).json({ success: false, error: 'Lead name and address are required' });
+    }
+    if (status !== undefined && !LEAD_STATUSES.includes(status)) {
+      return res.status(400).json({ success: false, error: 'Invalid lead status' });
+    }
+    const lead = await prisma.lead.create({
+      data: {
+        name: String(name).trim(),
+        address: String(address).trim(),
+        city: city ? String(city).trim() : '',
+        phone: phone ? String(phone).trim() : null,
+        saleDate: saleDate ? new Date(saleDate) : null,
+        salePrice: salePrice === undefined || salePrice === null || salePrice === '' ? null : salePrice,
+        acres: acres === undefined || acres === null || acres === '' ? null : Number(acres),
+        parcelId: parcelId ? String(parcelId).trim() : null,
+        source: source ? String(source).trim() : 'Auditor sales',
+        status: status || 'new',
+        notes: notes ? String(notes) : null,
+        contractorAccountId: req.tenantId,
+        createdById: req.dbUser.id
+      }
+    });
+    res.status(201).json({ success: true, lead });
+  } catch (error) {
+    console.error('Error creating lead:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.put('/api/leads/:id', requireTenantAuth, async (req, res) => {
+  try {
+    const existing = await prisma.lead.findFirst({
+      where: { AND: [{ id: req.params.id }, scopeWhere(req)] }
+    });
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Lead not found' });
+    }
+    const body = req.body || {};
+    if (body.status !== undefined && !LEAD_STATUSES.includes(body.status)) {
+      return res.status(400).json({ success: false, error: 'Invalid lead status' });
+    }
+    const data = {};
+    for (const field of ['name', 'address', 'city', 'phone', 'parcelId', 'source', 'status', 'notes']) {
+      if (body[field] !== undefined) data[field] = body[field];
+    }
+    if (body.saleDate !== undefined) data.saleDate = body.saleDate ? new Date(body.saleDate) : null;
+    if (body.salePrice !== undefined) data.salePrice = body.salePrice === null || body.salePrice === '' ? null : body.salePrice;
+    if (body.acres !== undefined) data.acres = body.acres === null || body.acres === '' ? null : Number(body.acres);
+    const lead = await prisma.lead.update({ where: { id: existing.id }, data });
+    res.json({ success: true, lead });
+  } catch (error) {
+    console.error('Error updating lead:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/leads/:id', requireTenantAuth, async (req, res) => {
+  try {
+    const existing = await prisma.lead.findFirst({
+      where: { AND: [{ id: req.params.id }, scopeWhere(req)] }
+    });
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Lead not found' });
+    }
+    await prisma.lead.delete({ where: { id: existing.id } });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting lead:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ---------- Approval queue (/api/ops/items) ----------
+
+app.get('/api/ops/items', requireTenantAuth, async (req, res) => {
+  try {
+    const { status } = req.query;
+    const conditions = [scopeWhere(req)];
+    if (status && status !== 'all') {
+      if (!OPS_STATUSES.includes(status)) {
+        return res.status(400).json({ success: false, error: 'Invalid queue status' });
+      }
+      conditions.push({ status });
+    }
+    const items = await prisma.opsItem.findMany({
+      where: { AND: conditions },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json({ success: true, items });
+  } catch (error) {
+    console.error('Error fetching queue items:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/ops/items', requireTenantAuth, async (req, res) => {
+  try {
+    const { kind, title, body } = req.body || {};
+    if (!title || !String(title).trim()) {
+      return res.status(400).json({ success: false, error: 'Queue item title is required' });
+    }
+    if (kind !== undefined && !OPS_KINDS.includes(kind)) {
+      return res.status(400).json({ success: false, error: 'Invalid queue item kind' });
+    }
+    const item = await prisma.opsItem.create({
+      data: {
+        kind: kind || 'note',
+        title: String(title).trim(),
+        body: body ? String(body) : '',
+        contractorAccountId: req.tenantId,
+        createdById: req.dbUser.id
+      }
+    });
+    res.status(201).json({ success: true, item });
+  } catch (error) {
+    console.error('Error creating queue item:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.put('/api/ops/items/:id', requireTenantAuth, async (req, res) => {
+  try {
+    const existing = await prisma.opsItem.findFirst({
+      where: { AND: [{ id: req.params.id }, scopeWhere(req)] }
+    });
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Queue item not found' });
+    }
+    const body = req.body || {};
+    if (body.status !== undefined && !OPS_STATUSES.includes(body.status)) {
+      return res.status(400).json({ success: false, error: 'Invalid queue status' });
+    }
+    const data = {};
+    for (const field of ['status', 'title', 'body', 'kind']) {
+      if (body[field] !== undefined) data[field] = body[field];
+    }
+    if (data.kind !== undefined && !OPS_KINDS.includes(data.kind)) {
+      return res.status(400).json({ success: false, error: 'Invalid queue item kind' });
+    }
+    const item = await prisma.opsItem.update({ where: { id: existing.id }, data });
+    res.json({ success: true, item });
+  } catch (error) {
+    console.error('Error updating queue item:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/ops/items/:id', requireTenantAuth, async (req, res) => {
+  try {
+    const existing = await prisma.opsItem.findFirst({
+      where: { AND: [{ id: req.params.id }, scopeWhere(req)] }
+    });
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Queue item not found' });
+    }
+    await prisma.opsItem.delete({ where: { id: existing.id } });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting queue item:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ---------- Today card (/api/ops/day) ----------
+
+const DAY_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+function todayKey() {
+  const now = new Date();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${mm}-${dd}`;
+}
+
+app.get('/api/ops/day', requireTenantAuth, async (req, res) => {
+  try {
+    const date = req.query.date || todayKey();
+    if (!DAY_DATE_RE.test(date)) {
+      return res.status(400).json({ success: false, error: 'date must be YYYY-MM-DD' });
+    }
+    const card = await prisma.dayCard.findFirst({
+      where: { AND: [{ date }, scopeWhere(req)] }
+    });
+    res.json({
+      success: true,
+      day: card || { date, mustWin: '', brick: '' }
+    });
+  } catch (error) {
+    console.error('Error fetching day card:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.put('/api/ops/day', requireTenantAuth, async (req, res) => {
+  try {
+    const { date: rawDate, mustWin, brick } = req.body || {};
+    const date = rawDate || todayKey();
+    if (!DAY_DATE_RE.test(date)) {
+      return res.status(400).json({ success: false, error: 'date must be YYYY-MM-DD' });
+    }
+    const data = {
+      mustWin: mustWin === undefined ? '' : String(mustWin),
+      brick: brick === undefined ? '' : String(brick)
+    };
+    const card = await prisma.dayCard.upsert({
+      where: {
+        contractorAccountId_date: {
+          contractorAccountId: req.tenantId,
+          date
+        }
+      },
+      create: {
+        date,
+        ...data,
+        contractorAccountId: req.tenantId,
+        createdById: req.dbUser.id
+      },
+      update: data
+    });
+    res.json({ success: true, day: card });
+  } catch (error) {
+    console.error('Error saving day card:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ---------- Command home summary (/api/ops/summary) ----------
+// Real numbers for the command home's business strip, computed from the
+// existing engine models. Quotes: the Estimate model carries no status
+// of its own, so "quotes out" counts estimates on projects still in the
+// system's one open status ('active') — quoted, not yet closed.
+app.get('/api/ops/summary', requireTenantAuth, async (req, res) => {
+  try {
+    const scope = scopeWhere(req);
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const startOfTomorrow = new Date(startOfToday);
+    startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+    const startOfMonth = new Date(startOfToday.getFullYear(), startOfToday.getMonth(), 1);
+
+    const [openEstimates, followUpsDue, monthReceipts, jobsToday, newLeads, queuedItems] =
+      await Promise.all([
+        prisma.estimate.findMany({
+          where: { AND: [scope, { project: { status: 'active' } }] },
+          select: { totalCost: true }
+        }),
+        prisma.followUpReminder.count({
+          where: {
+            AND: [
+              scope,
+              { status: 'pending' },
+              { scheduledDate: { lt: startOfTomorrow } }
+            ]
+          }
+        }),
+        prisma.receipt.findMany({
+          where: { AND: [scope, { receiptDate: { gte: startOfMonth } }] },
+          select: { total: true }
+        }),
+        prisma.scheduledJob.count({
+          where: {
+            AND: [
+              scope,
+              { status: { in: ['scheduled', 'in_progress'] } },
+              { startDate: { lt: startOfTomorrow } },
+              { endDate: { gte: startOfToday } }
+            ]
+          }
+        }),
+        prisma.lead.count({ where: { AND: [scope, { status: 'new' }] } }),
+        prisma.opsItem.count({ where: { AND: [scope, { status: 'queued' }] } })
+      ]);
+
+    res.json({
+      success: true,
+      summary: {
+        quotesOut: {
+          count: openEstimates.length,
+          total: openEstimates.reduce((sum, e) => sum + Number(e.totalCost), 0)
+        },
+        followUpsDue: { count: followUpsDue },
+        receiptsThisMonth: {
+          count: monthReceipts.length,
+          total: monthReceipts.reduce((sum, r) => sum + Number(r.total), 0)
+        },
+        jobsToday: { count: jobsToday },
+        leadsNew: { count: newLeads },
+        queueQueued: { count: queuedItems }
+      }
+    });
+  } catch (error) {
+    console.error('Error computing command summary:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = app;
