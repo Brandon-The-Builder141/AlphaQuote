@@ -325,3 +325,42 @@ changes (`git diff` touches nothing under `frontend/src/services/` or
 - Verified: `npm run build` passes; production bundle contains the
   fonts, theme tokens, shell/tabbar/table classes, and route-specific
   strings for every page.
+
+## Hotfix — Real sign-ins bounced at provisioning (2026-11-03, branch `hotfix-sync-profile`)
+
+- **Bug (production, every real sign-in):** Brandon's first real Google
+  sign-in on the Render deployment ended at the app's "We couldn't load
+  your account" screen. Root cause: Clerk's DEFAULT session token
+  carries only the user id (`sub`) — email, name, and public_metadata
+  are NOT default claims. Middleware built `req.user` from
+  `payload.email` / `given_name` / `family_name` (all undefined), and
+  `createOrUpdateUser` hard-requires an email → `POST /api/users/sync`
+  answered 400 for every real token. Tests never saw it: the harness
+  fake verifyToken always returned full claims. (On Railway,
+  provisioning had arrived via the Clerk webhook's full user object;
+  no webhook is configured on Render, so sync is the only path.)
+- **Fix (provisioning only):** in `POST /api/users/sync`, when the
+  verified identity has no email, the API fetches the full profile from
+  Clerk's Backend API — `Clerk({ secretKey }).users.getUser(userId)`
+  (@clerk/clerk-sdk-node v4, client built lazily) — and provisions from
+  the returned user object, whose camelCase shape
+  `createOrUpdateUser`'s normalizer already accepts. If the fetch
+  throws or the profile has no primary email, sync answers **502**,
+  logs the failure server-side, and creates **nothing** (no partial
+  user/account rows). Token verification, the middleware, tenant
+  scoping, and `createOrUpdateUser`'s contract are unchanged.
+- **Tests mirror reality now:** the harness grew `bare:<email>` tokens
+  (payload = `{ sub }` only — the real default token shape) and a
+  stubbed Backend client (`clerkProfileStub` in helpers.js). New suite
+  `hotfix-sync-profile.test.js` (4 tests): sub-only token provisions
+  with the fetched email/name + Iron Legion account + setup stamp;
+  re-sync idempotent; claims-bearing token provisions with NO profile
+  fetch; fetch failure → 502 with zero rows created.
+- **Full suite: 72/72 passing** (68 baseline + 4 new).
+- **Observed, deliberately NOT fixed here:** `req.user.metadata` is
+  likewise `{}` for real tokens (`public_metadata` is not a default
+  claim), so `GET /api/users/subscription` → `hasProSubscription`
+  always reads 'free' for real sign-ins; and `resolveTenant`'s
+  by-email fallback (tenant.js) never fires for real tokens (the
+  clerkId path carries it). Both want a session-token/profile decision
+  of their own, not a ride on this hotfix.

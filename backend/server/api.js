@@ -128,10 +128,53 @@ app.get('/api/health', (req, res) => {
 });
 
 // User Management Routes
+
+// Clerk's default session token carries the user id (sub) but NOT the
+// email/name claims — those only appear if the instance's session token
+// has been customized. Provisioning (userService.createOrUpdateUser)
+// hard-requires an email, so a verified identity without one can never
+// provision: sync resolves the full profile from Clerk's Backend API
+// first. The returned user object is the Backend API shape, which
+// createOrUpdateUser's normalizer already accepts (same family as the
+// webhook user object). The client is built lazily so importing this
+// module never requires credentials (and tests can stub the SDK first).
+let clerkBackendClient = null;
+function fetchClerkUserProfile(userId) {
+  if (!clerkBackendClient) {
+    const { Clerk } = require('@clerk/clerk-sdk-node');
+    clerkBackendClient = Clerk({ secretKey: process.env.CLERK_SECRET_KEY });
+  }
+  return clerkBackendClient.users.getUser(userId);
+}
+
 app.post('/api/users/sync', authenticateUser, async (req, res) => {
   try {
-    const result = await userService.createOrUpdateUser(req.user);
-    
+    let identity = req.user;
+
+    if (!identity.email) {
+      let clerkUser = null;
+      try {
+        clerkUser = await fetchClerkUserProfile(identity.id);
+      } catch (error) {
+        console.error('Clerk profile fetch failed during sync:', error);
+      }
+
+      const profileEmail = clerkUser?.emailAddresses?.[0]?.emailAddress;
+      if (!profileEmail) {
+        // No profile (or no primary email on it): provisioning cannot
+        // proceed. Answer 502 and create nothing — no partial user or
+        // contractor-account rows.
+        return res.status(502).json({
+          success: false,
+          error: 'Could not load your account profile from Clerk. Please try again.'
+        });
+      }
+
+      identity = clerkUser;
+    }
+
+    const result = await userService.createOrUpdateUser(identity);
+
     if (result.success) {
       res.json({ success: true, data: result.data });
     } else {

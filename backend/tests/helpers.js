@@ -10,7 +10,14 @@
  *   local file DB with zero external services; app code is unchanged.
  * - Replaces @clerk/clerk-sdk-node's verifyToken with a deterministic fake
  *   BEFORE the API is required: a token of the form `valid:<email>`
- *   verifies as that identity; anything else throws (invalid token).
+ *   verifies as that identity (WITH an email claim); a token of the form
+ *   `bare:<email>` verifies as `{ sub }` ONLY — the shape of a REAL Clerk
+ *   session token, whose default claims carry no email/name/metadata.
+ *   Anything else throws (invalid token).
+ * - Also stubs the SDK's Clerk Backend client (users.getUser), which
+ *   POST /api/users/sync uses to resolve the profile for bare tokens.
+ *   Tests drive it through the exported `clerkProfileStub`: it records
+ *   every getUser call and can be made to throw (fail = true).
  * - Imports the Express app (it no longer listens on import) and serves it
  *   on an ephemeral port.
  */
@@ -51,7 +58,49 @@ async function fakeVerifyToken(token) {
     const email = token.slice('valid:'.length);
     return { sub: `clerk_${email}`, email };
   }
+  if (typeof token === 'string' && token.startsWith('bare:')) {
+    const email = token.slice('bare:'.length);
+    // Real default Clerk session token: sub only, no profile claims.
+    return { sub: `clerk_${email}` };
+  }
   throw new Error('Invalid token');
+}
+
+// Stub Clerk Backend API client (users.getUser). The fake user ids minted
+// by fakeVerifyToken look like `clerk_<email>`; the stub "profile" for
+// such an id carries that email plus a fixed name, in the Backend API
+// (camelCase) shape the real client returns.
+const clerkProfileStub = {
+  calls: [],
+  fail: false,
+  reset() {
+    this.calls = [];
+    this.fail = false;
+  }
+};
+
+function fakeClerkClientFactory() {
+  return {
+    users: {
+      async getUser(userId) {
+        clerkProfileStub.calls.push(userId);
+        if (clerkProfileStub.fail) {
+          throw new Error('Clerk Backend API unavailable (stubbed failure)');
+        }
+        const email = userId.startsWith('clerk_') ? userId.slice('clerk_'.length) : null;
+        if (!email) {
+          throw new Error(`Clerk user not found (stub): ${userId}`);
+        }
+        return {
+          id: userId,
+          firstName: 'Stub',
+          lastName: 'Profile',
+          primaryEmailAddressId: 'email_stub_1',
+          emailAddresses: [{ id: 'email_stub_1', emailAddress: email }]
+        };
+      }
+    }
+  };
 }
 
 async function startTestServer() {
@@ -87,7 +136,11 @@ async function startTestServer() {
     id: clerkPath,
     filename: clerkPath,
     loaded: true,
-    exports: { verifyToken: fakeVerifyToken }
+    exports: {
+      verifyToken: fakeVerifyToken,
+      Clerk: fakeClerkClientFactory,
+      createClerkClient: fakeClerkClientFactory
+    }
   };
 
   const { PrismaClient } = require('@prisma/client');
@@ -108,4 +161,4 @@ async function stopTestServer({ prisma, server, tmpDir }) {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 }
 
-module.exports = { startTestServer, stopTestServer };
+module.exports = { startTestServer, stopTestServer, clerkProfileStub };
