@@ -270,3 +270,58 @@ NOT pushed — Solen reviews and lands. Full report:
 68/68 passing (40 at pass start; +15 pass7-hardening, +11
 pass7-sweep, +2 net scraper-contract tests in provisioning).
 Frontend production build passes.
+
+## Pass Eight — IRON UI overhaul (2026-11-03, branch `pass8-ui`)
+
+Branch `pass8-ui` (off `pass4-postgres` @ f1aaf4d). NOT merged, NOT
+pushed — Solen reviews and lands. Full report:
+`~/workspace/alphaquote/pass8-report-2026-11-03.md`.
+
+Presentation only: no service, API, route, field-name, or handler
+changes (`git diff` touches nothing under `frontend/src/services/` or
+`backend/`).
+
+- **Design system ("IRON"):** new `frontend/src/styles/theme.css` —
+  blackened-steel tokens (--bg #0B0C0E, --panel #141519, --raised
+  #1B1D22, --steel #26282E, --bone #F2EFE9, --muted #9BA0A6, ember
+  #FF5C1A → amber #FF9E2C gradient, ember glow), Barlow Condensed
+  display type + Inter UI type (loaded in `public/index.html`),
+  brushed-steel/blueprint-grid textures from pure CSS gradients, and
+  shared classes: `.btn-ember` / `.btn-steel` / `.btn-ghost`, `.card`,
+  `.stat-card` (ember top hairline, oversized condensed numbers),
+  `.badge` variants, `.iron-table`.
+- **Palette remap:** `tailwind.config.js` maps the slate/gray scales
+  the app was built on onto the iron neutrals, `primary` to the ember
+  scale, `accent` to amber, and the legacy `neon-blue` alias to ember;
+  blue/purple muted to steel tones. Every existing utility class now
+  renders in IRON without rewriting hundreds of classNames.
+- **Shell:** `Layout.jsx` rebuilt — IL monogram tile, active nav with
+  ember left bar + glow, sticky topbar (page title + company name).
+  Mobile (≤860px, the primary viewport): sidebar hides, bottom tab bar
+  appears — Dashboard, Estimates, Templates (→ /estimate/advanced,
+  where TaskTemplates lives), Vendors, Receipts, Profile; tap targets
+  ≥44px; content padded clear of the tab bar.
+- **Landing rebuilt as the showpiece:** blueprint-grid hero with ember
+  radial glow, "BUILT RIGHT. / QUOTED STRAIGHT." in giant condensed
+  type (second line ember-gradient), the six trades as chips,
+  starter-template cards at the real totals ($11,300 / $10,100 /
+  $8,000 / $5,125 / $4,300 / $825), the four Pass Five quote terms as a
+  strip, pricing tiers restyled from the same config.
+- **Dashboard is a command center:** command band with the New
+  Estimate CTA, Iron Legion stat cards ($60 solo / $90 crew / $350
+  minimum / 14-day validity), quick-action cards to every work
+  surface (module gating preserved).
+- **Tables** on ReceiptDetail, ProjectBudget, and ReceiptConfirm are
+  `.iron-table` with `data-label` cells — dark rows, steel dividers,
+  hover state, and stacked-card layout on small screens.
+- **Light-module conversions:** ChangeOrderManager and
+  RegionalPricePack were light panels inside the dark estimator;
+  converted to dark steel. The customer quote PDF's accent hex moved
+  teal → ember to match (colors only).
+- **Copy consistency (flagged, not logic):** the EstimateForm paper
+  preview now says Iron Legion Contracting and 14-day validity,
+  matching the Pass Five quote terms already on the PDF/email; the
+  advanced estimator's header reads "Advanced Estimator".
+- Verified: `npm run build` passes; production bundle contains the
+  fonts, theme tokens, shell/tabbar/table classes, and route-specific
+  strings for every page.

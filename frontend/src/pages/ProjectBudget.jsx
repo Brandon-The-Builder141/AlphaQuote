@@ -79,7 +79,7 @@ export default function ProjectBudget() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white p-6 flex items-center justify-center">
+      <div className="min-h-screen iron-bg text-white font-body p-4 sm:p-6 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neon-blue mx-auto mb-4"></div>
           <p className="text-lg text-neon-blue">Loading project budget...</p>
@@ -90,7 +90,7 @@ export default function ProjectBudget() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white p-6 flex items-center justify-center">
+      <div className="min-h-screen iron-bg text-white font-body p-4 sm:p-6 flex items-center justify-center">
         <div className="text-center">
           <div className="text-red-400 text-6xl mb-4">❌</div>
           <h2 className="text-2xl font-bold text-red-400 mb-2">Error Loading Project</h2>
@@ -108,7 +108,7 @@ export default function ProjectBudget() {
 
   if (!project) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white p-6 flex items-center justify-center">
+      <div className="min-h-screen iron-bg text-white font-body p-4 sm:p-6 flex items-center justify-center">
         <div className="text-center">
           <div className="text-gray-400 text-6xl mb-4">📁</div>
           <h2 className="text-2xl font-bold text-gray-400 mb-2">Project Not Found</h2>
@@ -127,16 +127,16 @@ export default function ProjectBudget() {
   const totalReceiptCost = getTotalReceiptCost();
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-6">
+    <div className="min-h-screen iron-bg text-white font-body p-4 sm:p-6">
       <div className="max-w-7xl mx-auto space-y-8">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1
               onClick={() => navigate('/')}
-              className="text-4xl font-bold text-neon-blue mb-2 cursor-pointer hover:text-blue-400 transition-colors"
+              className="font-display text-[2.4rem] leading-none text-white mb-2 cursor-pointer hover:text-primary transition-colors"
             >
-              🧮 AlphaQuote - {project.name} - Budget Overview
+              {project.name} — Budget Overview
             </h1>
             <p className="text-gray-400">
               Client: {project.clientName || 'N/A'} •
@@ -146,15 +146,15 @@ export default function ProjectBudget() {
           </div>
           <button
             onClick={() => navigate('/receipts')}
-            className="bg-gray-600 hover:bg-gray-500 text-white px-6 py-3 rounded-lg font-semibold transition-colors duration-200"
+            className="btn-steel"
           >
             ← Back to Receipts
           </button>
         </div>
 
         {/* Project Info Card */}
-        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-          <h2 className="text-xl font-semibold text-neon-blue mb-4">Project Information</h2>
+        <div className="card p-6">
+          <h2 className="font-display text-[1.5rem] text-primary mb-4">Project Information</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <p className="text-gray-400">Client Name:</p>
@@ -191,17 +191,17 @@ export default function ProjectBudget() {
 
         {/* Receipt Summary */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+          <div className="card p-6">
             <h3 className="text-lg font-semibold text-neon-blue mb-2">Total Receipts</h3>
             <p className="text-3xl font-bold text-white">{project.receipts?.length || 0}</p>
             <p className="text-gray-400 text-sm">Receipts linked to this project</p>
           </div>
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+          <div className="card p-6">
             <h3 className="text-lg font-semibold text-neon-blue mb-2">Total Cost</h3>
             <p className="text-3xl font-bold text-green-400">{formatCurrency(totalReceiptCost)}</p>
             <p className="text-gray-400 text-sm">From all receipts</p>
           </div>
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+          <div className="card p-6">
             <h3 className="text-lg font-semibold text-neon-blue mb-2">Vendors</h3>
             <p className="text-3xl font-bold text-white">{Object.keys(vendorBreakdown).length}</p>
             <p className="text-gray-400 text-sm">Different vendors</p>
@@ -210,11 +210,11 @@ export default function ProjectBudget() {
 
         {/* Vendor Breakdown */}
         {Object.keys(vendorBreakdown).length > 0 && (
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <h2 className="text-xl font-semibold text-neon-blue mb-4">Vendor Breakdown</h2>
+          <div className="card p-6">
+            <h2 className="font-display text-[1.5rem] text-primary mb-4">Vendor Breakdown</h2>
             <div className="space-y-4">
               {Object.entries(vendorBreakdown).map(([vendor, data]) => (
-                <div key={vendor} className="bg-gray-700 rounded-lg p-4">
+                <div key={vendor} className="bg-slate-800 rounded-xl p-4 border border-slate-700">
                   <div className="flex justify-between items-center mb-2">
                     <h3 className="text-lg font-semibold text-white">{vendor}</h3>
                     <div className="text-right">
@@ -228,7 +228,7 @@ export default function ProjectBudget() {
                         <span className="text-gray-300">
                           {formatDate(receipt.purchaseDate)} - {receipt.fileName}
                         </span>
-                        <span className="text-neon-blue">{formatCurrency(receipt.total)}</span>
+                        <span className="text-primary font-medium">{formatCurrency(receipt.total)}</span>
                       </div>
                     ))}
                   </div>
@@ -239,26 +239,26 @@ export default function ProjectBudget() {
         )}
 
         {/* Receipt Details */}
-        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-          <h2 className="text-xl font-semibold text-neon-blue mb-4">All Receipts</h2>
+        <div className="card p-6">
+          <h2 className="font-display text-[1.5rem] text-primary mb-4">All Receipts</h2>
           {project.receipts && project.receipts.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="iron-table">
                 <thead>
-                  <tr className="border-b border-gray-600">
-                    <th className="text-left py-3 px-4 text-gray-300">Date</th>
-                    <th className="text-left py-3 px-4 text-gray-300">Vendor</th>
-                    <th className="text-left py-3 px-4 text-gray-300">File</th>
-                    <th className="text-right py-3 px-4 text-gray-300">Amount</th>
+                  <tr>
+                    <th>Date</th>
+                    <th>Vendor</th>
+                    <th>File</th>
+                    <th>Amount</th>
                   </tr>
                 </thead>
                 <tbody>
                   {project.receipts.map((receipt) => (
-                    <tr key={receipt.id} className="border-b border-gray-700 hover:bg-gray-700 transition-colors">
-                      <td className="py-3 px-4 text-white">{formatDate(receipt.purchaseDate)}</td>
-                      <td className="py-3 px-4 text-white">{receipt.vendor}</td>
-                      <td className="py-3 px-4 text-gray-300">{receipt.fileName}</td>
-                      <td className="py-3 px-4 text-right text-green-400 font-semibold">
+                    <tr key={receipt.id}>
+                      <td data-label="Date">{formatDate(receipt.purchaseDate)}</td>
+                      <td data-label="Vendor">{receipt.vendor}</td>
+                      <td data-label="File" className="text-slate-300">{receipt.fileName}</td>
+                      <td data-label="Amount" className="num text-green-500">
                         {formatCurrency(receipt.total)}
                       </td>
                     </tr>
@@ -272,7 +272,7 @@ export default function ProjectBudget() {
               <p className="text-gray-400">No receipts linked to this project yet.</p>
               <button
                 onClick={() => navigate('/receipts')}
-                className="mt-4 bg-neon-blue hover:bg-blue-500 text-white px-6 py-3 rounded-lg font-semibold transition-colors duration-200"
+                className="btn-ember mt-4"
               >
                 View All Receipts
               </button>

@@ -19,13 +19,13 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: 20,
-    borderBottom: '2 solid #14B8A6',
+    borderBottom: '2 solid #FF5C1A',
     paddingBottom: 15
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#14B8A6',
+    color: '#FF5C1A',
     marginBottom: 5
   },
   subtitle: {
@@ -42,7 +42,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#1E293B',
+    color: '#141519',
     marginBottom: 8,
     textTransform: 'uppercase',
     letterSpacing: 0.5
@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
   },
   value: {
     fontSize: 11,
-    color: '#1E293B',
+    color: '#141519',
     fontWeight: 'bold'
   },
   table: {
@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
   },
   tableHeader: {
     flexDirection: 'row',
-    backgroundColor: '#14B8A6',
+    backgroundColor: '#FF5C1A',
     padding: 8,
     borderRadius: 4,
     marginBottom: 5
@@ -91,14 +91,14 @@ const styles = StyleSheet.create({
   },
   tableCell: {
     fontSize: 10,
-    color: '#1E293B'
+    color: '#141519'
   },
   totalSection: {
     marginTop: 20,
     padding: 15,
     backgroundColor: '#F1F5F9',
     borderRadius: 4,
-    border: '2 solid #14B8A6'
+    border: '2 solid #FF5C1A'
   },
   totalRow: {
     flexDirection: 'row',
@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
   },
   totalValue: {
     fontSize: 11,
-    color: '#1E293B',
+    color: '#141519',
     fontWeight: 'bold'
   },
   grandTotalRow: {
@@ -119,17 +119,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 10,
     paddingTop: 10,
-    borderTop: '2 solid #14B8A6'
+    borderTop: '2 solid #FF5C1A'
   },
   grandTotalLabel: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#1E293B'
+    color: '#141519'
   },
   grandTotalValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#14B8A6'
+    color: '#FF5C1A'
   },
   footer: {
     position: 'absolute',
@@ -163,7 +163,7 @@ const styles = StyleSheet.create({
     lineHeight: 1.4
   },
   badge: {
-    backgroundColor: '#14B8A6',
+    backgroundColor: '#FF5C1A',
     color: '#FFFFFF',
     fontSize: 8,
     padding: 3,

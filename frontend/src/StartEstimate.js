@@ -3,16 +3,25 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import ServiceStatus from './components/ServiceStatus';
 import { getEnabledModules } from './utils/moduleVisibility';
+import { MINIMUM_JOB_AMOUNT, QUOTE_VALIDITY_DAYS, SERVICE_CATEGORIES, LABOR_RATES } from './utils/pricingConstants';
 import {
   Calculator,
   FileText,
   BarChart3,
   Receipt,
-  TrendingUp,
+  Store,
+  LayoutTemplate,
+  Mail,
+  Calendar,
+  ArrowRight,
   UserPlus,
   Play
 } from 'lucide-react';
 
+// Pass Eight (IRON): the dashboard is a command center now, not a
+// marketing hero. Same state, handlers and module gating as before —
+// quick actions to the working surfaces, the Iron Legion numbers up
+// front, and the service status chip kept.
 export default function StartEstimate() {
   const navigate = useNavigate();
   const [enabledModules, setEnabledModules] = useState(getEnabledModules());
@@ -32,384 +41,161 @@ export default function StartEstimate() {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white font-body overflow-hidden relative">
-      {/* Animated Background Elements */}
-      <div className="absolute inset-0 overflow-hidden">
-        {/* Blueprint Grid Pattern */}
-        <div
-          className="absolute inset-0 opacity-[0.02] animate-pulse"
-          style={{
-            backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'100\' height=\'100\' viewBox=\'0 0 100 100\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cdefs%3E%3Cpattern id=\'grid\' width=\'10\' height=\'10\' patternUnits=\'userSpaceOnUse\'%3E%3Cpath d=\'M 10 0 L 0 0 0 10\' fill=\'none\' stroke=\'%2314B8A6\' stroke-width=\'0.5\'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width=\'100\' height=\'100\' fill=\'url(%23grid)\'/%3E%3C/svg%3E")'
-          }}
-        ></div>
+  const actions = [
+    {
+      icon: Calculator,
+      title: 'New Estimate',
+      description: 'Guided wizard — client, work items, review, send.',
+      path: '/estimate'
+    },
+    {
+      icon: LayoutTemplate,
+      title: 'Templates',
+      description: 'Start from a real job: fence, deck, siding, LVP and more.',
+      path: '/estimate/advanced'
+    },
+    {
+      icon: Receipt,
+      title: 'Receipts',
+      description: 'Material receipts tied to jobs — your pricing memory.',
+      path: '/receipts'
+    },
+    {
+      icon: Store,
+      title: 'Vendors',
+      description: 'Local suppliers and the prices they actually charge.',
+      path: '/vendors',
+      module: 'vendorManagement'
+    },
+    {
+      icon: BarChart3,
+      title: 'Analytics',
+      description: 'What the work is doing, in numbers.',
+      path: '/analytics'
+    },
+    {
+      icon: Mail,
+      title: 'Follow-Ups',
+      description: 'Keep bids alive until the customer answers.',
+      path: '/followups'
+    },
+    {
+      icon: Calendar,
+      title: 'Scheduling',
+      description: 'Jobs on the calendar, synced and visible.',
+      path: '/scheduling'
+    },
+    {
+      icon: FileText,
+      title: 'Advanced Estimator',
+      description: 'Room-by-room detail with change orders and regional pricing.',
+      path: '/estimate/advanced'
+    }
+  ].filter(action => !action.module || enabledModules[action.module]);
 
-        {/* Floating Particles */}
-        <div className="absolute inset-0">
-          {[...Array(20)].map((_, i) => (
-            <motion.div
-              key={i}
-              className="absolute w-1 h-1 bg-primary/20 rounded-full"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`
-              }}
-              animate={{
-                y: [0, -20, 0],
-                opacity: [0.2, 0.8, 0.2]
-              }}
-              transition={{
-                duration: 3 + Math.random() * 2,
-                repeat: Infinity,
-                delay: Math.random() * 2
-              }}
-            />
+  return (
+    <div className="text-slate-100 font-body">
+      <div className="max-w-7xl mx-auto px-4 sm:px-8 py-8">
+        {/* Command band */}
+        <motion.div
+          className="relative overflow-hidden card !rounded-2xl px-6 py-8 sm:px-10 sm:py-10 mb-8"
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <div className="blueprint-grid absolute inset-0" aria-hidden="true"></div>
+          <div className="relative">
+            <div className="flex flex-wrap items-start justify-between gap-4 mb-5">
+              <p className="eyebrow">Iron Legion Contracting — Command Center</p>
+              <ServiceStatus compact={true} />
+            </div>
+            <h2 className="font-display font-bold uppercase leading-[0.95] text-[2.6rem] sm:text-6xl mb-4">
+              Build the quote.<br />
+              <span className="ember-text">Send it straight.</span>
+            </h2>
+            <p className="text-slate-400 max-w-xl leading-relaxed mb-8">
+              Line-by-line pricing from real material costs, your rates, your terms —
+              a clean PDF before you leave the driveway.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3">
+              {isSignedIn ? (
+                <>
+                  <button onClick={() => navigate('/estimate')} className="btn-ember btn-lg">
+                    <Calculator className="w-5 h-5" /> Start New Estimate
+                  </button>
+                  <button onClick={() => navigate('/estimate/advanced')} className="btn-steel btn-lg">
+                    Advanced Estimator
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button onClick={() => navigate('/sign-up')} className="btn-ember btn-lg">
+                    <UserPlus className="w-5 h-5" /> Get Started Free
+                  </button>
+                  <button onClick={() => navigate('/demo')} className="btn-steel btn-lg">
+                    <Play className="w-5 h-5" /> Try Demo
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Iron Legion numbers */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-10">
+          <div className="stat-card">
+            <p className="stat-num">${LABOR_RATES.SOLO}<span className="text-2xl text-slate-400">/hr</span></p>
+            <p className="stat-label">Solo labor rate</p>
+          </div>
+          <div className="stat-card">
+            <p className="stat-num">${LABOR_RATES.CREW}<span className="text-2xl text-slate-400">/hr</span></p>
+            <p className="stat-label">Crew labor rate</p>
+          </div>
+          <div className="stat-card">
+            <p className="stat-num">${MINIMUM_JOB_AMOUNT}</p>
+            <p className="stat-label">Minimum job</p>
+          </div>
+          <div className="stat-card">
+            <p className="stat-num">{QUOTE_VALIDITY_DAYS}<span className="text-2xl text-slate-400"> days</span></p>
+            <p className="stat-label">Quote validity · {SERVICE_CATEGORIES.length} trades</p>
+          </div>
+        </div>
+
+        {/* Quick actions */}
+        <h3 className="font-display text-[1.6rem] mb-4">Work surfaces</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+          {actions.map((action, index) => (
+            <motion.button
+              key={action.title}
+              onClick={() => navigate(action.path)}
+              className="card p-6 text-left group hover:!border-primary/50 transition-colors"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: index * 0.05 }}
+              whileHover={{ y: -3 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/25 flex items-center justify-center mb-4">
+                <action.icon className="w-6 h-6 text-primary" />
+              </div>
+              <h4 className="font-display text-[1.3rem] leading-tight mb-1.5 flex items-center gap-2">
+                {action.title}
+                <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+              </h4>
+              <p className="text-sm text-slate-400 leading-relaxed">{action.description}</p>
+            </motion.button>
           ))}
         </div>
 
-        {/* Abstract Construction Lines */}
-        <motion.div
-          className="absolute top-20 right-20 w-96 h-96 opacity-[0.03]"
-          animate={{ rotate: 360 }}
-          transition={{ duration: 120, repeat: Infinity, ease: 'linear' }}
-        >
-          <svg viewBox="0 0 400 400" className="w-full h-full">
-            <path
-              d="M50,50 Q200,100 350,50 L350,150 Q200,200 50,150 Z"
-              fill="none"
-              stroke="#14B8A6"
-              strokeWidth="2"
-            />
-            <path
-              d="M50,250 Q200,300 350,250 L350,350 Q200,400 50,350 Z"
-              fill="none"
-              stroke="#F97316"
-              strokeWidth="2"
-            />
-          </svg>
-        </motion.div>
-      </div>
-
-      {/* Premium Header */}
-      <div className="relative bg-slate-950/80 backdrop-blur-xl border-b border-slate-800/50 p-6">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <motion.div
-            className="flex items-center space-x-6"
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.6 }}
+        {/* Footer strip */}
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 mt-12 pt-6 border-t border-slate-700">
+          <p className="text-slate-400 text-sm">Ready to transform your estimation process?</p>
+          <button
+            onClick={() => navigate('/pricing')}
+            className="btn-ghost !min-h-[40px] text-sm"
           >
-            <div className="flex items-center space-x-3">
-              <div className="relative">
-                <Calculator className="w-8 h-8 text-primary" />
-                <motion.div
-                  className="absolute -top-1 -right-1 w-3 h-3 bg-accent rounded-full"
-                  animate={{ scale: [1, 1.2, 1] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                />
-              </div>
-              <h2
-                onClick={() => navigate('/')}
-                className="text-2xl font-heading text-white cursor-pointer hover:text-primary transition-colors duration-300"
-              >
-                AlphaQuote
-              </h2>
-            </div>
-            <div className="hidden md:block w-px h-6 bg-slate-700"></div>
-            <span className="text-slate-400 font-body text-sm">Professional Estimation Software</span>
-          </motion.div>
-
-          <div className="flex items-center gap-4">
-            <ServiceStatus compact={true} />
-          </div>
-        </div>
-      </div>
-
-      {/* Hero Section */}
-      <div className="relative min-h-screen flex items-center py-20">
-        <div className="max-w-7xl mx-auto px-8 w-full">
-          <div className="grid lg:grid-cols-12 gap-12 items-center">
-            {/* Hero Content - Offset Layout */}
-            <div className="lg:col-start-2 lg:col-span-6 space-y-8">
-              <motion.div
-                className="space-y-6"
-                initial={{ opacity: 0, x: -40 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.8, ease: 'easeOut' }}
-              >
-                {/* Status Badge */}
-                <motion.div
-                  className="inline-flex items-center space-x-2 bg-primary/10 border border-primary/20 rounded-full px-4 py-2"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, delay: 0.2 }}
-                >
-                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                  <span className="text-sm text-primary font-medium">All services online</span>
-                </motion.div>
-
-                {/* Main Title - Offset */}
-                <motion.h1
-                  className="text-5xl lg:text-7xl font-heading text-white leading-tight"
-                  initial={{ opacity: 0, y: 30 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8, delay: 0.3, ease: 'easeOut' }}
-                >
-                  <span className="block">Estimate</span>
-                  <motion.span
-                    className="block text-accent"
-                    animate={{
-                      opacity: [1, 0.7, 1],
-                      scale: [1, 1.02, 1]
-                    }}
-                    transition={{
-                      duration: 2,
-                      repeat: Infinity,
-                      ease: 'easeInOut'
-                    }}
-                  >
-                    Smarter
-                  </motion.span>
-                  <span className="block text-3xl lg:text-4xl text-transparent bg-clip-text bg-gradient-to-r from-slate-300 to-slate-500 mt-2">
-                    Lead the pack
-                  </span>
-                </motion.h1>
-
-                {/* Subheader */}
-                <motion.p
-                  className="text-xl text-slate-300 font-body leading-relaxed max-w-lg"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8, delay: 0.5, ease: 'easeOut' }}
-                >
-                  Professional construction estimation software with AI assistance,  real-time pricing,
-  and beautiful PDF reports that win more projects.
-                </motion.p>
-
-                {/* CTA Buttons */}
-                <motion.div
-                  className="flex flex-col sm:flex-row gap-4 pt-4"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8, delay: 0.7, ease: 'easeOut' }}
-                >
-                  {isSignedIn ? (
-                    <>
-                      <motion.button
-                        onClick={() => navigate('/estimate')}
-                        className="group relative bg-gradient-to-r from-primary to-primary/80 text-white px-8 py-4 rounded-2xl text-lg font-semibold transition-all duration-300 flex items-center justify-center space-x-3 overflow-hidden"
-                        whileHover={{ scale: 1.05, y: -2 }}
-                        whileTap={{ scale: 0.98 }}
-                      >
-                        <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
-                        <BarChart3 className="w-6 h-6 relative z-10" />
-                        <span className="relative z-10">Start New Estimate</span>
-                      </motion.button>
-
-                    </>
-                  ) : (
-                    <>
-                      <motion.button
-                        onClick={() => navigate('/sign-up')}
-                        className="group relative bg-gradient-to-r from-primary to-primary/80 text-white px-8 py-4 rounded-2xl text-lg font-semibold transition-all duration-300 flex items-center justify-center space-x-3 overflow-hidden"
-                        whileHover={{ scale: 1.05, y: -2 }}
-                        whileTap={{ scale: 0.98 }}
-                      >
-                        <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
-                        <UserPlus className="w-6 h-6 relative z-10" />
-                        <span className="relative z-10">Get Started Free</span>
-                      </motion.button>
-
-                      <motion.button
-                        onClick={() => navigate('/demo')}
-                        className="group relative bg-gradient-to-r from-accent to-accent/80 text-white px-8 py-4 rounded-2xl text-lg font-semibold transition-all duration-300 flex items-center justify-center space-x-3 overflow-hidden"
-                        whileHover={{ scale: 1.05, y: -2 }}
-                        whileTap={{ scale: 0.98 }}
-                      >
-                        <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
-                        <Play className="w-6 h-6 relative z-10" />
-                        <span className="relative z-10">Try Demo</span>
-                      </motion.button>
-                    </>
-                  )}
-                </motion.div>
-              </motion.div>
-            </div>
-
-            {/* Hero Visual - Right Side */}
-            <div className="lg:col-span-5 lg:col-start-8">
-              <motion.div
-                className="relative"
-                initial={{ opacity: 0, x: 40 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.8, delay: 0.4, ease: 'easeOut' }}
-              >
-                {/* Floating Cards Preview */}
-                <div className="relative">
-                  <motion.div
-                    className="absolute top-0 right-0 w-64 h-40 bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50 p-4"
-                    animate={{ y: [0, -10, 0] }}
-                    transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-                  >
-                    <div className="flex items-center space-x-3 mb-3">
-                      <div className="w-8 h-8 bg-primary/20 rounded-lg flex items-center justify-center">
-                        <Receipt className="w-4 h-4 text-primary" />
-                      </div>
-                      <span className="text-white font-medium text-sm">Receipt Intelligence</span>
-                    </div>
-                    <p className="text-slate-400 text-xs">Upload receipts to build your local pricing database</p>
-                  </motion.div>
-
-                  <motion.div
-                    className="absolute top-20 left-0 w-56 h-36 bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50 p-4"
-                    animate={{ y: [0, 10, 0] }}
-                    transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
-                  >
-                    <div className="flex items-center space-x-3 mb-3">
-                      <div className="w-8 h-8 bg-accent/20 rounded-lg flex items-center justify-center">
-                        <FileText className="w-4 h-4 text-accent" />
-                      </div>
-                      <span className="text-white font-medium text-sm">Professional PDFs</span>
-                    </div>
-                    <p className="text-slate-400 text-xs">Beautiful, branded estimates ready to send</p>
-                  </motion.div>
-
-                  <motion.div
-                    className="relative top-40 left-16 w-60 h-32 bg-gradient-to-br from-primary/20 to-accent/20 backdrop-blur-sm rounded-xl border border-primary/30 p-4"
-                    animate={{ y: [0, -5, 0] }}
-                    transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
-                  >
-                    <div className="flex items-center space-x-3 mb-3">
-                      <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center">
-                        <TrendingUp className="w-4 h-4 text-white" />
-                      </div>
-                      <span className="text-white font-medium text-sm">Smart Estimates</span>
-                    </div>
-                    <p className="text-slate-300 text-xs">Real-time pricing from major retailers</p>
-                  </motion.div>
-                </div>
-              </motion.div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-
-      {/* Premium Features Section */}
-      <div className="relative py-24">
-        <div className="max-w-7xl mx-auto px-8">
-          <motion.div
-            className="text-center mb-16"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 1.2, ease: 'easeOut' }}
-          >
-            <h2 className="text-4xl lg:text-5xl font-heading text-white mb-6">
-              Everything you need to
-              <span className="block text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">
-                win more projects
-              </span>
-            </h2>
-            <p className="text-xl text-slate-400 max-w-3xl mx-auto leading-relaxed">
-              Powerful tools designed for construction professionals who demand precision, speed, and results.
-            </p>
-          </motion.div>
-
-          {/* Feature Cards Grid */}
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {[
-              {
-                icon: BarChart3,
-                title: 'Smart Estimates',
-                description: 'Create detailed estimates with real-time pricing from major retailers',
-                color: 'primary',
-                delay: 0.1,
-                module: 'estimation'
-              },
-              {
-                icon: FileText,
-                title: 'Professional PDFs',
-                description: 'Beautiful, branded PDF estimates ready to send to clients immediately',
-                color: 'primary',
-                delay: 0.3,
-                module: 'estimation'
-              },
-              {
-                icon: Receipt,
-                title: 'Receipt Intelligence',
-                description: 'Upload receipts to build your local pricing database with real supplier costs',
-                color: 'accent',
-                delay: 0.4,
-                module: null // Always show
-              }
-            ].filter(feature => !feature.module || enabledModules[feature.module]).map((feature, index) => (
-              <motion.div
-                key={index}
-                className="group relative bg-slate-900/50 backdrop-blur-sm border border-slate-800/50 rounded-2xl p-8 hover:border-primary/30 transition-all duration-500"
-                initial={{ opacity: 0, y: 40 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: 1.4 + feature.delay, ease: 'easeOut' }}
-                whileHover={{ y: -8, scale: 1.02 }}
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-accent/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-
-                <div className="relative z-10">
-                  <div className={`w-16 h-16 bg-${feature.color}/10 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-${feature.color}/20 transition-colors duration-300`}>
-                    <feature.icon className={`w-8 h-8 text-${feature.color}`} />
-                  </div>
-
-                  <h3 className="text-xl font-heading text-white mb-4 group-hover:text-primary transition-colors duration-300">
-                    {feature.title}
-                  </h3>
-
-                  <p className="text-slate-400 leading-relaxed group-hover:text-slate-300 transition-colors duration-300">
-                    {feature.description}
-                  </p>
-                </div>
-
-                {/* Hover Glow Effect */}
-                <div className={`absolute inset-0 rounded-2xl bg-gradient-to-br from-${feature.color}/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none`}></div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Footer */}
-      <div className="relative py-12 border-t border-slate-800/50">
-        <div className="max-w-7xl mx-auto px-8">
-          <motion.div
-            className="flex flex-col md:flex-row items-center justify-between gap-6"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 1.4 }}
-          >
-            <div className="text-center md:text-left">
-              <p className="text-slate-400">
-                Ready to transform your estimation process?
-              </p>
-            </div>
-
-            <div className="flex items-center gap-4">
-              {isSignedIn ? (
-                <motion.button
-                  onClick={() => navigate('/pricing')}
-                  className="bg-slate-800/50 hover:bg-slate-700/50 text-white px-4 py-2 rounded-lg transition-colors text-sm"
-                  whileHover={{ scale: 1.05 }}
-                >
-                  Upgrade to Pro
-                </motion.button>
-              ) : (
-                <motion.button
-                  onClick={() => navigate('/pricing')}
-                  className="text-slate-400 hover:text-white transition-colors text-sm"
-                  whileHover={{ scale: 1.05 }}
-                >
-                  View Pricing
-                </motion.button>
-              )}
-            </div>
-          </motion.div>
+            {isSignedIn ? 'Upgrade to Pro' : 'View Pricing'}
+          </button>
         </div>
       </div>
     </div>

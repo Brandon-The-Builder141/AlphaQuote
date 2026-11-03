@@ -87,7 +87,7 @@ export default function ReceiptDetail() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white p-6">
+      <div className="min-h-screen iron-bg text-white font-body p-4 sm:p-6">
         <div className="max-w-4xl mx-auto">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b border-neon-blue mx-auto mb-4"></div>
@@ -100,7 +100,7 @@ export default function ReceiptDetail() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white p-6">
+      <div className="min-h-screen iron-bg text-white font-body p-4 sm:p-6">
         <div className="max-w-4xl mx-auto">
           <div className="text-center">
             <div className="bg-red-600 rounded-lg p-6 mb-6">
@@ -121,7 +121,7 @@ export default function ReceiptDetail() {
 
   if (!receipt) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white p-6">
+      <div className="min-h-screen iron-bg text-white font-body p-4 sm:p-6">
         <div className="max-w-4xl mx-auto">
           <div className="text-center">
             <h2 className="text-xl font-semibold mb-2">Receipt Not Found</h2>
@@ -139,7 +139,7 @@ export default function ReceiptDetail() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-6">
+    <div className="min-h-screen iron-bg text-white font-body p-4 sm:p-6">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -153,7 +153,7 @@ export default function ReceiptDetail() {
 
           <div className="flex justify-between items-start">
             <div>
-              <h1 className="text-3xl font-bold text-neon-blue">Receipt Details</h1>
+              <h1 className="font-display text-[2.3rem] leading-none text-white">Receipt Details</h1>
               <p className="text-gray-400 mt-2">
                 Receipt ID: {receipt.id}
               </p>
@@ -161,7 +161,7 @@ export default function ReceiptDetail() {
             <div className="flex space-x-3">
               <button
                 onClick={handleDeleteReceipt}
-                className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg transition-colors duration-200"
+                className="bg-red-600 hover:bg-red-500 text-white px-5 py-2.5 rounded-md font-semibold transition-colors duration-200"
               >
                 Delete Receipt
               </button>
@@ -171,8 +171,8 @@ export default function ReceiptDetail() {
 
         {/* Receipt Information */}
         <div className="grid md:grid-cols-2 gap-6 mb-8">
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <h2 className="text-xl font-semibold text-neon-blue mb-4">Receipt Information</h2>
+          <div className="card p-6">
+            <h2 className="font-display text-[1.5rem] text-primary mb-4">Receipt Information</h2>
             <div className="space-y-3">
               <div className="flex justify-between">
                 <span className="text-gray-400">Vendor:</span>
@@ -199,8 +199,8 @@ export default function ReceiptDetail() {
             </div>
           </div>
 
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <h2 className="text-xl font-semibold text-neon-blue mb-4">Summary</h2>
+          <div className="card p-6">
+            <h2 className="font-display text-[1.5rem] text-primary mb-4">Summary</h2>
             <div className="space-y-3">
               <div className="flex justify-between">
                 <span className="text-gray-400">Total Items:</span>
@@ -231,51 +231,46 @@ export default function ReceiptDetail() {
         </div>
 
         {/* Line Items */}
-        <div className="bg-gray-800 rounded-lg border border-gray-700 mb-8">
+        <div className="card mb-8">
           <div className="p-6 border-b border-gray-700">
-            <h2 className="text-xl font-semibold text-neon-blue">Line Items</h2>
+            <h2 className="font-display text-[1.5rem] text-primary">Line Items</h2>
           </div>
 
           {receipt.items && receipt.items.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-700">
+              <table className="iron-table">
+                <thead>
                   <tr>
-                    <th className="text-left py-4 px-6 text-gray-300 font-medium">Item Name</th>
-                    <th className="text-left py-4 px-6 text-gray-300 font-medium">Quantity</th>
-                    <th className="text-left py-4 px-6 text-gray-300 font-medium">Unit Price</th>
-                    <th className="text-left py-4 px-6 text-gray-300 font-medium">Total</th>
+                    <th>Item Name</th>
+                    <th>Quantity</th>
+                    <th>Unit Price</th>
+                    <th>Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {receipt.items.map((item, index) => (
-                    <tr
-                      key={index}
-                      className={`border-b border-gray-700 ${
-                        index % 2 === 0 ? 'bg-gray-800' : 'bg-gray-800/50'
-                      }`}
-                    >
-                      <td className="py-4 px-6">
+                    <tr key={index}>
+                      <td data-label="Item">
                         <p className="text-white font-medium">{item.name}</p>
                       </td>
-                      <td className="py-4 px-6">
+                      <td data-label="Qty">
                         <p className="text-white">{item.quantity}</p>
                       </td>
-                      <td className="py-4 px-6">
+                      <td data-label="Unit Price">
                         <p className="text-white">{formatCurrency(item.unitPrice)}</p>
                       </td>
-                      <td className="py-4 px-6">
+                      <td data-label="Total">
                         <p className="text-white font-semibold">{formatCurrency(item.total)}</p>
                       </td>
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="bg-gray-700">
+                <tfoot>
                   <tr>
-                    <td colSpan="3" className="py-4 px-6 text-right text-gray-300 font-medium">
+                    <td colSpan="3" className="text-right text-slate-400 font-medium">
                       Total:
                     </td>
-                    <td className="py-4 px-6">
+                    <td data-label="Total">
                       <p className="text-white font-bold text-lg">{formatCurrency(receipt.total)}</p>
                     </td>
                   </tr>
@@ -291,9 +286,9 @@ export default function ReceiptDetail() {
 
         {/* Raw Text (if available) */}
         {receipt.rawText && (
-          <div className="bg-gray-800 rounded-lg border border-gray-700 mb-8">
+          <div className="card mb-8">
             <div className="p-6 border-b border-gray-700">
-              <h2 className="text-xl font-semibold text-neon-blue">Raw OCR Text</h2>
+              <h2 className="font-display text-[1.5rem] text-primary">Raw OCR Text</h2>
               <p className="text-sm text-gray-400 mt-1">Original text extracted from the receipt</p>
             </div>
             <div className="p-6">

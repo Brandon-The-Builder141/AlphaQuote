@@ -61,7 +61,7 @@ export default function ReceiptList() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white p-6">
+      <div className="min-h-screen iron-bg text-white font-body p-4 sm:p-6">
         <div className="max-w-6xl mx-auto">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b border-neon-blue mx-auto mb-4"></div>
@@ -74,7 +74,7 @@ export default function ReceiptList() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white p-6">
+      <div className="min-h-screen iron-bg text-white font-body p-4 sm:p-6">
         <div className="max-w-6xl mx-auto">
           <div className="text-center">
             <div className="bg-red-600 rounded-lg p-6 mb-6">
@@ -94,7 +94,7 @@ export default function ReceiptList() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-6">
+    <div className="min-h-screen iron-bg text-white font-body p-4 sm:p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">

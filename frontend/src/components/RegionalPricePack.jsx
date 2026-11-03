@@ -147,7 +147,7 @@ const RegionalPricePack = ({
 
   if (loading) {
     return (
-      <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-white/20 shadow-xl p-6">
+      <div className="bg-slate-900/85 backdrop-blur-sm rounded-2xl border border-white/20 shadow-xl p-6">
         <div className="flex items-center justify-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
           <span className="ml-3 text-slate-600">Loading regional pricing...</span>
@@ -157,15 +157,15 @@ const RegionalPricePack = ({
   }
 
   return (
-    <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-white/20 shadow-xl p-6">
+    <div className="bg-slate-900/85 backdrop-blur-sm rounded-2xl border border-white/20 shadow-xl p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-3">
-          <div className="p-2 bg-gradient-to-br from-green-500 to-blue-600 rounded-xl">
+          <div className="p-2 bg-gradient-to-br bg-ember-gradient rounded-xl">
             <Globe className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h3 className="text-xl font-semibold text-slate-900">Regional Material Pricing</h3>
+            <h3 className="text-xl font-semibold text-white">Regional Material Pricing</h3>
             <p className="text-sm text-slate-600">Get region-specific material price suggestions</p>
           </div>
         </div>
@@ -176,7 +176,7 @@ const RegionalPricePack = ({
           <select
             value={selectedRegion || ''}
             onChange={(e) => onRegionChange(e.target.value)}
-            className="px-3 py-1 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="px-3 py-1 border border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             {pricePacks.map(pack => (
               <option key={pack.id} value={pack.region}>
@@ -219,7 +219,7 @@ const RegionalPricePack = ({
             placeholder="Search materials..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full pl-10 pr-3 py-2 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
 
@@ -229,7 +229,7 @@ const RegionalPricePack = ({
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
-            className="px-3 py-1 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="px-3 py-1 border border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             {categories.map(category => (
               <option key={category} value={category}>
@@ -247,7 +247,7 @@ const RegionalPricePack = ({
             key={material.id}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-white/60 backdrop-blur-sm rounded-xl border border-white/20 p-4 hover:shadow-lg transition-all duration-200 cursor-pointer"
+            className="bg-slate-800/60 backdrop-blur-sm rounded-xl border border-white/20 p-4 hover:shadow-lg transition-all duration-200 cursor-pointer"
             onClick={() => handleMaterialClick(material)}
           >
             <div className="flex justify-between items-start mb-3">
@@ -266,7 +266,7 @@ const RegionalPricePack = ({
               </div>
             </div>
 
-            <h4 className="font-medium text-slate-900 mb-2 line-clamp-2">
+            <h4 className="font-medium text-white mb-2 line-clamp-2">
               {material.materialName}
             </h4>
 
@@ -315,23 +315,23 @@ const RegionalPricePack = ({
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-2xl p-6 w-full max-w-md mx-4"
+              className="card !bg-slate-900 p-6 w-full max-w-md mx-4"
             >
-              <h3 className="text-lg font-semibold text-slate-900 mb-4">
+              <h3 className="text-lg font-semibold text-white mb-4">
                 Customize Price
               </h3>
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
                     Material
                   </label>
-                  <p className="text-slate-900 font-medium">{selectedMaterial.materialName}</p>
+                  <p className="text-white font-medium">{selectedMaterial.materialName}</p>
                   <p className="text-sm text-slate-600">{selectedMaterial.category}</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
                     Suggested Price: {formatCurrency(selectedMaterial.unitPrice)}
                   </label>
                   <div className="relative">
@@ -342,7 +342,7 @@ const RegionalPricePack = ({
                       min="0"
                       value={customPrice}
                       onChange={(e) => setCustomPrice(e.target.value)}
-                      className="w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full pl-10 pr-3 py-2 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="Enter custom price"
                     />
                   </div>
@@ -355,7 +355,7 @@ const RegionalPricePack = ({
               <div className="flex justify-end space-x-3 mt-6">
                 <button
                   onClick={() => setShowCustomPriceInput(false)}
-                  className="px-4 py-2 text-slate-600 hover:text-slate-800 transition-colors"
+                  className="px-4 py-2 text-slate-600 hover:text-slate-100 transition-colors"
                 >
                   Cancel
                 </button>
@@ -391,11 +391,11 @@ const RegionalPricePack = ({
               .map(material => (
                 <div
                   key={material.id}
-                  className="flex items-center justify-between p-2 bg-white rounded-lg border border-green-200 cursor-pointer hover:bg-green-50 transition-colors"
+                  className="flex items-center justify-between p-2 bg-slate-800 rounded-lg border border-slate-700 cursor-pointer hover:bg-slate-700 transition-colors"
                   onClick={() => handleSuggestedPriceSelect(material)}
                 >
                   <div>
-                    <p className="font-medium text-slate-900">{material.materialName}</p>
+                    <p className="font-medium text-white">{material.materialName}</p>
                     <p className="text-sm text-slate-600">{material.category}</p>
                   </div>
                   <div className="text-right">

@@ -87,7 +87,7 @@ const ProFeatureGate = ({
                 e.stopPropagation();
                 handleUpgrade();
               }}
-              className="bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300"
+              className="bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300"
             >
               Upgrade to Pro
             </button>
@@ -153,7 +153,7 @@ const ProFeatureGate = ({
               <div className="space-y-3">
                 <button
                   onClick={handleUpgrade}
-                  className="w-full bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 text-white py-3 px-6 rounded-xl font-semibold transition-all duration-300"
+                  className="w-full bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 text-white py-3 px-6 rounded-xl font-semibold transition-all duration-300"
                 >
                   Start Pro Trial - $29/month
                 </button>

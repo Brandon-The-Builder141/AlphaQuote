@@ -17,7 +17,7 @@ const Section = ({ title, children }) => (
 );
 
 const Terms = () => (
-  <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+  <div className="min-h-screen iron-bg">
     <div className="max-w-3xl mx-auto px-4 py-10">
       <Link to="/" className="inline-flex items-center gap-2 text-slate-300 hover:text-white mb-10">
         <Hammer className="w-5 h-5 text-primary" />

@@ -18,7 +18,7 @@ import { motion } from 'framer-motion';
 import { ensureProvisioned } from '../services/provisioning';
 
 const LoadingScreen = ({ message }) => (
-  <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+  <div className="min-h-screen iron-bg flex items-center justify-center">
     <motion.div
       className="text-center"
       initial={{ opacity: 0, y: 20 }}
@@ -26,7 +26,7 @@ const LoadingScreen = ({ message }) => (
       transition={{ duration: 0.6 }}
     >
       <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-      <h2 className="text-xl font-semibold text-white mb-2">Loading AlphaQuote...</h2>
+      <h2 className="text-xl font-display uppercase tracking-wide text-white mb-2">Loading AlphaQuote...</h2>
       <p className="text-slate-400">{message || 'Please wait while we authenticate your session'}</p>
     </motion.div>
   </div>
@@ -94,9 +94,9 @@ const ProtectedRoute = ({ children }) => {
 
   if (gate.status === 'error') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center px-4">
+      <div className="min-h-screen iron-bg flex items-center justify-center px-4">
         <div className="text-center max-w-md">
-          <h2 className="text-xl font-semibold text-white mb-2">We couldn't load your account</h2>
+          <h2 className="text-xl font-display uppercase tracking-wide text-white mb-2">We couldn't load your account</h2>
           <p className="text-slate-400 mb-6">
             AlphaQuote couldn't reach the server to set up your account. Check your connection and try again.
           </p>

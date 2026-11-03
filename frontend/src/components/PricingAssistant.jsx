@@ -212,7 +212,7 @@ export default function PricingAssistant({ materialName, onPriceSelect, selected
                       <p className="text-lg font-bold text-white">${material.unitPrice.toFixed(2)}</p>
                       <button
                         onClick={() => handleSelectPrice(material.unitPrice.toFixed(2))}
-                        className="bg-white text-green-600 hover:bg-green-100 px-2 py-1 rounded text-xs font-medium transition-colors"
+                        className="bg-slate-100 text-green-700 hover:bg-white px-2 py-1 rounded text-xs font-medium transition-colors"
                       >
                         Use
                       </button>

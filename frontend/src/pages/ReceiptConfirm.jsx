@@ -204,7 +204,7 @@ export default function ReceiptConfirm() {
 
   if (!editableData) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white p-6">
+      <div className="min-h-screen iron-bg text-white font-body p-4 sm:p-6">
         <div className="max-w-4xl mx-auto">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b border-neon-blue mx-auto mb-4"></div>
@@ -216,7 +216,7 @@ export default function ReceiptConfirm() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-6">
+    <div className="min-h-screen iron-bg text-white font-body p-4 sm:p-6">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -234,8 +234,8 @@ export default function ReceiptConfirm() {
         </div>
 
         {/* Vendor and Date Section */}
-        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 mb-6">
-          <h2 className="text-xl font-semibold text-neon-blue mb-4">Receipt Information</h2>
+        <div className="card p-6 mb-6">
+          <h2 className="font-display text-[1.5rem] text-primary mb-4">Receipt Information</h2>
 
           <div className="grid md:grid-cols-2 gap-6">
             {/* Vendor Name */}
@@ -270,9 +270,9 @@ export default function ReceiptConfirm() {
         </div>
 
         {/* Items Section */}
-        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 mb-6">
+        <div className="card p-6 mb-6">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold text-neon-blue">Line Items</h2>
+            <h2 className="font-display text-[1.5rem] text-primary">Line Items</h2>
             <button
               onClick={addItem}
               className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
@@ -283,20 +283,20 @@ export default function ReceiptConfirm() {
 
           {editableData.items.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="iron-table">
                 <thead>
-                  <tr className="border-b border-gray-600">
-                    <th className="text-left py-3 px-4 text-gray-300 font-medium">Item Name</th>
-                    <th className="text-left py-3 px-4 text-gray-300 font-medium">Quantity</th>
-                    <th className="text-left py-3 px-4 text-gray-300 font-medium">Unit Price</th>
-                    <th className="text-left py-3 px-4 text-gray-300 font-medium">Total</th>
-                    <th className="text-center py-3 px-4 text-gray-300 font-medium">Actions</th>
+                  <tr>
+                    <th>Item Name</th>
+                    <th>Quantity</th>
+                    <th>Unit Price</th>
+                    <th>Total</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {editableData.items.map((item, index) => (
-                    <tr key={index} className="border-b border-gray-700 hover:bg-gray-700/50">
-                      <td className="py-3 px-4">
+                    <tr key={index}>
+                      <td data-label="Item">
                         <input
                           type="text"
                           value={item.name}
@@ -305,7 +305,7 @@ export default function ReceiptConfirm() {
                           placeholder="Item name"
                         />
                       </td>
-                      <td className="py-3 px-4">
+                      <td data-label="Qty">
                         <input
                           type="number"
                           min="0"
@@ -316,7 +316,7 @@ export default function ReceiptConfirm() {
                           placeholder="Qty"
                         />
                       </td>
-                      <td className="py-3 px-4">
+                      <td data-label="Unit Price">
                         <input
                           type="number"
                           min="0"
@@ -327,12 +327,12 @@ export default function ReceiptConfirm() {
                           placeholder="0.00"
                         />
                       </td>
-                      <td className="py-3 px-4">
+                      <td data-label="Total">
                         <span className="text-white font-medium">
                           ${(item.quantity * item.unitPrice).toFixed(2)}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-center">
+                      <td data-label="Actions" className="text-center">
                         <button
                           onClick={() => removeItem(index)}
                           className="text-red-400 hover:text-red-300 text-sm"
@@ -350,7 +350,7 @@ export default function ReceiptConfirm() {
               <p className="text-gray-400 mb-4">No items added yet</p>
               <button
                 onClick={addItem}
-                className="bg-neon-blue hover:bg-blue-500 text-white px-6 py-3 rounded-lg transition-colors duration-200"
+                className="btn-ember"
               >
                 Add First Item
               </button>
@@ -359,9 +359,9 @@ export default function ReceiptConfirm() {
         </div>
 
         {/* Total Section */}
-        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 mb-6">
+        <div className="card p-6 mb-6">
           <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold text-neon-blue">Total Amount</h2>
+            <h2 className="font-display text-[1.5rem] text-primary">Total Amount</h2>
             <div className="text-right">
               <p className="text-3xl font-bold text-white">
                 ${calculateTotal().toFixed(2)}

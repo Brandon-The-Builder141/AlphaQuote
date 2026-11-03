@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
 import { getEnabledModules } from '../utils/moduleVisibility';
 import {
   Calculator,
@@ -14,9 +13,37 @@ import {
   Home,
   ChevronLeft,
   ChevronRight,
-  LogOut
+  LogOut,
+  LayoutTemplate
 } from 'lucide-react';
 import { useAuth } from '@clerk/clerk-react';
+import { COMPANY_NAME } from '../config/site';
+
+// Pass Eight (IRON shell): same navigation, routes, module gating and
+// sign-out behavior as before — only the chrome changed. Blackened-steel
+// sidebar with the IL monogram on desktop; on phones the sidebar gives
+// way to a top bar + bottom tab bar (Brandon runs this from his iPhone).
+const PAGE_TITLES = [
+  ['/estimate/advanced', 'Advanced Estimator'],
+  ['/estimate', 'New Estimate'],
+  ['/result', 'Estimate Result'],
+  ['/receipts', 'Receipts'],
+  ['/vendors', 'Vendors'],
+  ['/projects', 'Project Budget'],
+  ['/analytics', 'Analytics'],
+  ['/followups', 'Follow-Ups'],
+  ['/accounting', 'Accounting'],
+  ['/scheduling', 'Scheduling'],
+  ['/profile', 'Profile'],
+  ['/offline', 'Offline Mode'],
+  ['/dashboard', 'Dashboard'],
+  ['/', 'Dashboard']
+];
+
+function pageTitle(pathname) {
+  const match = PAGE_TITLES.find(([prefix]) => prefix !== '/' && pathname.startsWith(prefix));
+  return match ? match[1] : 'Dashboard';
+}
 
 export default function Layout({ children }) {
   const navigate = useNavigate();
@@ -26,78 +53,15 @@ export default function Layout({ children }) {
   const [enabledModules] = useState(getEnabledModules());
 
   const navigationItems = [
-    {
-      icon: Home,
-      label: 'Dashboard',
-      path: '/',
-      color: 'text-blue-400',
-      hoverColor: 'hover:bg-blue-500/10',
-      alwaysShow: true
-    },
-    {
-      icon: Calculator,
-      label: 'New Estimate',
-      path: '/estimate',
-      color: 'text-primary',
-      hoverColor: 'hover:bg-primary/10',
-      alwaysShow: true
-    },
-    {
-      icon: Receipt,
-      label: 'Receipts',
-      path: '/receipts',
-      color: 'text-orange-400',
-      hoverColor: 'hover:bg-orange-500/10',
-      alwaysShow: true
-    },
-    {
-      icon: Store,
-      label: 'Vendors',
-      path: '/vendors',
-      color: 'text-purple-400',
-      hoverColor: 'hover:bg-purple-500/10',
-      module: 'vendorManagement'
-    },
-    {
-      icon: BarChart3,
-      label: 'Analytics',
-      path: '/analytics',
-      color: 'text-green-400',
-      hoverColor: 'hover:bg-green-500/10',
-      alwaysShow: true
-    },
-    {
-      icon: Mail,
-      label: 'Follow-Ups',
-      path: '/followups',
-      color: 'text-blue-400',
-      hoverColor: 'hover:bg-blue-500/10',
-      alwaysShow: true
-    },
-    {
-      icon: Download,
-      label: 'Accounting',
-      path: '/accounting',
-      color: 'text-orange-400',
-      hoverColor: 'hover:bg-orange-500/10',
-      alwaysShow: true
-    },
-    {
-      icon: Calendar,
-      label: 'Scheduling',
-      path: '/scheduling',
-      color: 'text-purple-400',
-      hoverColor: 'hover:bg-purple-500/10',
-      alwaysShow: true
-    },
-    {
-      icon: Settings,
-      label: 'Profile',
-      path: '/profile',
-      color: 'text-slate-400',
-      hoverColor: 'hover:bg-slate-500/10',
-      alwaysShow: true
-    }
+    { icon: Home, label: 'Dashboard', path: '/', alwaysShow: true },
+    { icon: Calculator, label: 'New Estimate', path: '/estimate', alwaysShow: true },
+    { icon: Receipt, label: 'Receipts', path: '/receipts', alwaysShow: true },
+    { icon: Store, label: 'Vendors', path: '/vendors', module: 'vendorManagement' },
+    { icon: BarChart3, label: 'Analytics', path: '/analytics', alwaysShow: true },
+    { icon: Mail, label: 'Follow-Ups', path: '/followups', alwaysShow: true },
+    { icon: Download, label: 'Accounting', path: '/accounting', alwaysShow: true },
+    { icon: Calendar, label: 'Scheduling', path: '/scheduling', alwaysShow: true },
+    { icon: Settings, label: 'Profile', path: '/profile', alwaysShow: true }
   ];
 
   const visibleItems = navigationItems.filter(item =>
@@ -116,130 +80,133 @@ export default function Layout({ children }) {
     navigate('/sign-in');
   };
 
+  // Bottom tab bar (mobile primary nav). "Templates" lives inside the
+  // advanced estimator, so its tab points at /estimate/advanced.
+  const tabItems = [
+    { icon: Home, label: 'Dashboard', path: '/', active: isActive('/') },
+    {
+      icon: Calculator,
+      label: 'Estimates',
+      path: '/estimate',
+      active: location.pathname === '/estimate' || location.pathname === '/result'
+    },
+    {
+      icon: LayoutTemplate,
+      label: 'Templates',
+      path: '/estimate/advanced',
+      active: location.pathname.startsWith('/estimate/advanced')
+    },
+    { icon: Store, label: 'Vendors', path: '/vendors', active: isActive('/vendors') },
+    { icon: Receipt, label: 'Receipts', path: '/receipts', active: isActive('/receipts') },
+    { icon: Settings, label: 'Profile', path: '/profile', active: isActive('/profile') }
+  ];
+
+  const title = pageTitle(location.pathname);
+
   return (
-    <div className="flex min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-      {/* Left Sidebar Navigation */}
-      <motion.div
-        className={`fixed left-0 top-0 h-screen bg-slate-900/95 backdrop-blur-sm border-r border-slate-800/50 shadow-2xl z-50 flex flex-col transition-all duration-300 ${
-          isCollapsed ? 'w-20' : 'w-64'
-        }`}
-        initial={{ x: -100, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-        transition={{ duration: 0.5, ease: 'easeOut' }}
-      >
-        {/* Header */}
-        <div className="p-6 border-b border-slate-800/50">
-          <div className="flex items-center justify-between">
-            <AnimatePresence>
-              {!isCollapsed && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="flex items-center space-x-3"
-                >
-                  <div className="w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-xl flex items-center justify-center">
-                    <Calculator className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <h1 className="text-xl font-heading text-white">AlphaQuote</h1>
-                    <p className="text-xs text-slate-400">Pro Estimates</p>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-            <motion.button
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              className="p-2 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 text-slate-400 hover:text-white transition-colors"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-            </motion.button>
-          </div>
+    <div className="iron-bg min-h-screen text-slate-100 font-body">
+      {/* ------- Desktop sidebar ------- */}
+      <aside className={`shell-sidebar ${isCollapsed ? 'collapsed' : ''}`}>
+        {/* Brand */}
+        <div className="flex items-center gap-3 px-5 pt-6 pb-5 border-b border-slate-700">
+          <span className="il-monogram">IL</span>
+          {!isCollapsed && (
+            <div className="min-w-0">
+              <p className="font-display text-[1.35rem] leading-none text-slate-100 truncate">
+                Iron Legion
+              </p>
+              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-slate-400 mt-1">
+                Command Center
+              </p>
+            </div>
+          )}
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className="ml-auto flex-none w-9 h-9 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+          >
+            {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+          </button>
         </div>
 
-        {/* Navigation Items */}
-        <nav className="flex-1 overflow-y-auto py-6 px-3">
-          <div className="space-y-2">
-            {visibleItems.map((item, index) => {
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto py-5 px-4">
+          <div className="space-y-1.5">
+            {visibleItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.path);
-
               return (
-                <motion.button
+                <button
                   key={item.path}
                   onClick={() => navigate(item.path)}
-                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-                    active
-                      ? 'bg-primary/20 border border-primary/30 text-white shadow-lg shadow-primary/20'
-                      : `text-slate-400 ${item.hoverColor} hover:text-white border border-transparent`
-                  }`}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.3, delay: index * 0.05 }}
-                  whileHover={{ x: 4, scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+                  className={`nav-link ${active ? 'active' : ''}`}
+                  title={isCollapsed ? item.label : undefined}
                 >
-                  <div className={`flex-shrink-0 ${active ? 'text-primary' : item.color}`}>
-                    <Icon className="w-5 h-5" />
-                  </div>
-                  <AnimatePresence>
-                    {!isCollapsed && (
-                      <motion.span
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="font-medium text-sm truncate"
-                      >
-                        {item.label}
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
-                  {active && !isCollapsed && (
-                    <motion.div
-                      className="ml-auto w-2 h-2 bg-primary rounded-full"
-                      layoutId="activeIndicator"
-                    />
-                  )}
-                </motion.button>
+                  <Icon className="w-5 h-5 flex-none" />
+                  {!isCollapsed && <span className="truncate">{item.label}</span>}
+                </button>
               );
             })}
           </div>
         </nav>
 
-        {/* Footer - Sign Out */}
-        <div className="p-4 border-t border-slate-800/50">
-          <motion.button
+        {/* Sign out */}
+        <div className="p-4 border-t border-slate-700">
+          <button
             onClick={handleSignOut}
-            className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+            className="nav-link hover:!text-red-400"
+            title={isCollapsed ? 'Sign Out' : undefined}
           >
-            <LogOut className="w-5 h-5" />
-            <AnimatePresence>
-              {!isCollapsed && (
-                <motion.span
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="font-medium text-sm"
-                >
-                  Sign Out
-                </motion.span>
-              )}
-            </AnimatePresence>
-          </motion.button>
+            <LogOut className="w-5 h-5 flex-none" />
+            {!isCollapsed && <span>Sign Out</span>}
+          </button>
         </div>
-      </motion.div>
+      </aside>
 
-      {/* Main Content Area */}
-      <div className={`flex-1 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
-        <div className="min-h-screen">
+      {/* ------- Main column ------- */}
+      <div className={`shell-main ${isCollapsed ? 'collapsed' : ''}`}>
+        <header className="shell-topbar">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="il-monogram il-monogram-sm min-[861px]:hidden">IL</span>
+            <h1 className="font-display text-[1.55rem] leading-none text-slate-100 truncate">
+              {title}
+            </h1>
+          </div>
+          <div className="flex items-center gap-3 flex-none">
+            <span className="hidden md:block text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-400">
+              {COMPANY_NAME}
+            </span>
+            <button
+              onClick={handleSignOut}
+              aria-label="Sign out"
+              className="min-[861px]:hidden w-11 h-11 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 flex items-center justify-center"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          </div>
+        </header>
+
+        <div className="shell-content">
           {children}
         </div>
       </div>
+
+      {/* ------- Mobile bottom tab bar ------- */}
+      <nav className="tabbar" aria-label="Primary">
+        {tabItems.map((item) => {
+          const Icon = item.icon;
+          return (
+            <button
+              key={item.label}
+              onClick={() => navigate(item.path)}
+              className={`tab-link ${item.active ? 'active' : ''}`}
+            >
+              <Icon className="w-6 h-6" />
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
     </div>
   );
 }
-

@@ -130,7 +130,7 @@ export default function ReceiptProcess() {
 
   if (files.length === 0) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white p-6">
+      <div className="min-h-screen iron-bg text-white font-body p-4 sm:p-6">
         <div className="max-w-4xl mx-auto">
           <div className="text-center">
             <p className="text-gray-400 mb-4">No files to process</p>
@@ -147,7 +147,7 @@ export default function ReceiptProcess() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-6">
+    <div className="min-h-screen iron-bg text-white font-body p-4 sm:p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -233,7 +233,7 @@ export default function ReceiptProcess() {
 
             <div className="space-y-6">
               {results.map((result) => (
-                <div key={result.id} className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                <div key={result.id} className="card p-6">
                   <div className="flex justify-between items-start mb-4">
                     <div>
                       <h3 className="text-lg font-semibold text-white">{result.fileName}</h3>

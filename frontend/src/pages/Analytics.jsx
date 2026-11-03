@@ -85,7 +85,7 @@ const Analytics = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
+      <div className="min-h-screen iron-bg p-6">
         <div className="flex items-center justify-center h-64">
           <div className="flex items-center gap-3 text-slate-300">
             <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent"></div>
@@ -99,7 +99,7 @@ const Analytics = () => {
   const { summaryStats, projectProfitability, vendorPerformance, materialTrends, revenueData, costBreakdown } = analyticsData;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
+    <div className="min-h-screen iron-bg p-6">
       {/* Header */}
       <motion.div
         className="mb-8"
@@ -112,7 +112,7 @@ const Analytics = () => {
               <BarChart3 className="h-8 w-8 text-primary" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-white">Analytics & Insights</h1>
+              <h1 className="font-display text-4xl text-white">Analytics & Insights</h1>
               <p className="text-slate-400">Track performance, profitability, and trends</p>
             </div>
           </div>

@@ -1,0 +1,699 @@
+/* ==========================================================================
+   IRON — AlphaQuote design system (Pass Eight)
+   Forged-iron / blackened-steel theme for Iron Legion Contracting's own
+   command center. Dark only. Imported once from src/index.js (after
+   index.css) so these tokens and component classes win over the legacy
+   styles while Tailwind utilities keep working on top of them.
+   ========================================================================== */
+
+:root {
+  --bg: #0B0C0E;
+  --panel: #141519;
+  --raised: #1B1D22;
+  --steel: #26282E;
+  --bone: #F2EFE9;
+  --muted: #9BA0A6;
+  --ember: #FF5C1A;
+  --amber: #FF9E2C;
+  --ember-gradient: linear-gradient(135deg, #FF5C1A, #FF9E2C);
+  --ember-glow: 0 8px 30px rgba(255, 92, 26, 0.35);
+  --success: #3FB96C;
+  --danger: #E5484D;
+  --field: #101114;
+}
+
+/* ---------- Base ---------- */
+
+html {
+  background: var(--bg);
+}
+
+body {
+  background: var(--bg);
+  color: var(--bone);
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgba(255, 92, 26, 0.45);
+  color: #fff;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ember);
+  outline-offset: 2px;
+}
+
+/* Brushed-steel app background: fine vertical brushing over blackened
+   steel, built purely from layered gradients (no image assets). */
+.iron-bg {
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(1100px 480px at 85% -10%, rgba(255, 92, 26, 0.055), transparent 60%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.014) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.008) 0 1px, transparent 1px 4px),
+    linear-gradient(180deg, #0E0F12 0%, var(--bg) 340px);
+}
+
+/* Faint blueprint grid (used under the landing hero / dashboard band). */
+.blueprint-grid {
+  background-image:
+    radial-gradient(720px 340px at 50% 0%, rgba(255, 92, 26, 0.14), transparent 65%),
+    repeating-linear-gradient(0deg, rgba(242, 239, 233, 0.05) 0 1px, transparent 1px 28px),
+    repeating-linear-gradient(90deg, rgba(242, 239, 233, 0.05) 0 1px, transparent 1px 28px);
+}
+
+/* ---------- Type helpers ---------- */
+
+.font-display,
+.display {
+  font-family: 'Barlow Condensed', 'Inter', sans-serif;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.ember-text {
+  background: var(--ember-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.eyebrow {
+  font-family: 'Barlow Condensed', 'Inter', sans-serif;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  font-size: 0.78rem;
+  color: var(--amber);
+}
+
+/* ---------- Buttons ---------- */
+
+.btn-ember,
+.btn-primary-iron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  min-height: 44px;
+  padding: 0.7rem 1.5rem;
+  background: var(--ember-gradient);
+  color: #1A0E06;
+  font-family: 'Barlow Condensed', 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 1.05rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border: none;
+  border-radius: 6px;
+  box-shadow: var(--ember-glow);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.btn-ember:hover,
+.btn-primary-iron:hover {
+  filter: brightness(1.07);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 36px rgba(255, 92, 26, 0.42);
+}
+
+.btn-ember:active,
+.btn-primary-iron:active {
+  transform: translateY(0);
+}
+
+.btn-ember:disabled,
+.btn-primary-iron:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-steel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  min-height: 44px;
+  padding: 0.7rem 1.4rem;
+  background: var(--raised);
+  color: var(--bone);
+  font-family: 'Barlow Condensed', 'Inter', sans-serif;
+  font-weight: 600;
+  font-size: 1.02rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border: 1px solid var(--steel);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.btn-steel:hover {
+  border-color: rgba(255, 92, 26, 0.55);
+  background: #212329;
+  transform: translateY(-1px);
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0.6rem 1.1rem;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  text-decoration: none;
+}
+
+.btn-ghost:hover {
+  color: var(--bone);
+  border-color: var(--steel);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.btn-lg {
+  min-height: 54px;
+  padding: 0.9rem 2.1rem;
+  font-size: 1.2rem;
+}
+
+/* ---------- Cards & stats ---------- */
+
+.card,
+.iron-card {
+  background: var(--panel);
+  border: 1px solid var(--steel);
+  border-radius: 14px;
+}
+
+.stat-card {
+  position: relative;
+  background: var(--panel);
+  border: 1px solid var(--steel);
+  border-radius: 14px;
+  padding: 1.4rem 1.5rem;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--ember-gradient);
+}
+
+.stat-num {
+  font-family: 'Barlow Condensed', 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 2.9rem;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  color: var(--bone);
+}
+
+.stat-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  margin-top: 0.45rem;
+}
+
+.hairline {
+  height: 2px;
+  background: var(--ember-gradient);
+  border: none;
+}
+
+/* ---------- Badges / chips ---------- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.28rem 0.7rem;
+  border-radius: 999px;
+  background: var(--raised);
+  border: 1px solid var(--steel);
+  color: var(--bone);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.badge-ember {
+  background: rgba(255, 92, 26, 0.14);
+  border-color: rgba(255, 92, 26, 0.45);
+  color: #FFB287;
+}
+
+.badge-success {
+  background: rgba(63, 185, 108, 0.13);
+  border-color: rgba(63, 185, 108, 0.45);
+  color: #8FDCA9;
+}
+
+.badge-danger {
+  background: rgba(229, 72, 77, 0.13);
+  border-color: rgba(229, 72, 77, 0.45);
+  color: #F3A3A6;
+}
+
+.trade-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.15rem;
+  border-radius: 10px;
+  background: var(--raised);
+  border: 1px solid var(--steel);
+  color: var(--bone);
+  font-family: 'Barlow Condensed', 'Inter', sans-serif;
+  font-weight: 600;
+  font-size: 1.08rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ---------- Forms (floor styles — component classes can override) --- */
+
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color']):not([type='hidden']),
+select,
+textarea {
+  background-color: var(--field);
+  border: 1px solid var(--steel);
+  border-radius: 8px;
+  color: var(--bone);
+  min-height: 44px;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #62666E;
+}
+
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color']):not([type='hidden']):focus,
+select:focus,
+textarea:focus {
+  border-color: var(--ember);
+  box-shadow: 0 0 0 3px rgba(255, 92, 26, 0.22);
+  outline: none;
+}
+
+select option {
+  background: var(--panel);
+  color: var(--bone);
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--ember);
+}
+
+.input,
+.iron-input {
+  width: 100%;
+  padding: 0.72rem 0.95rem;
+  background: var(--field);
+  border: 1px solid var(--steel);
+  border-radius: 8px;
+  color: var(--bone);
+  font-size: 0.95rem;
+}
+
+.label,
+.iron-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  margin-bottom: 0.45rem;
+}
+
+/* ---------- Tables ---------- */
+
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.iron-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.93rem;
+}
+
+.iron-table thead th {
+  font-family: 'Barlow Condensed', 'Inter', sans-serif;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-align: left;
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid var(--steel);
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.iron-table tbody td {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid rgba(38, 40, 46, 0.65);
+  color: var(--bone);
+  vertical-align: middle;
+}
+
+.iron-table tbody tr {
+  transition: background 0.12s ease;
+}
+
+.iron-table tbody tr:hover {
+  background: var(--raised);
+}
+
+.iron-table .num {
+  font-family: 'Barlow Condensed', 'Inter', sans-serif;
+  font-weight: 600;
+  font-size: 1.1rem;
+  letter-spacing: 0.02em;
+}
+
+/* Tables become stacked cards on small screens. Cells with a
+   data-label attribute show their column name; cells without one
+   simply stack. */
+@media (max-width: 640px) {
+  .iron-table,
+  .iron-table thead,
+  .iron-table tbody,
+  .iron-table tfoot,
+  .iron-table tr,
+  .iron-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .iron-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .iron-table tbody tr,
+  .iron-table tfoot tr {
+    background: var(--panel);
+    border: 1px solid var(--steel);
+    border-radius: 12px;
+    padding: 0.55rem 0.9rem;
+    margin-bottom: 0.8rem;
+  }
+
+  .iron-table tbody td,
+  .iron-table tfoot td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(38, 40, 46, 0.5);
+    text-align: right;
+  }
+
+  .iron-table tbody td:last-child,
+  .iron-table tfoot td:last-child {
+    border-bottom: none;
+  }
+
+  .iron-table tbody td::before,
+  .iron-table tfoot td::before {
+    content: attr(data-label);
+    font-family: 'Barlow Condensed', 'Inter', sans-serif;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.8rem;
+    color: var(--muted);
+    text-align: left;
+  }
+
+  .iron-table tbody td:not([data-label])::before,
+  .iron-table tfoot td:not([data-label])::before {
+    content: none;
+  }
+}
+
+/* ---------- App shell ---------- */
+
+.il-monogram {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  flex: none;
+  border-radius: 10px;
+  background: var(--ember-gradient);
+  color: #1A0E06;
+  font-family: 'Barlow Condensed', 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 1.45rem;
+  letter-spacing: 0.04em;
+  box-shadow: var(--ember-glow);
+}
+
+.il-monogram-sm {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  font-size: 1.12rem;
+}
+
+.shell-sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: 264px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  background-color: #0E0F12;
+  background-image:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.016) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, #101114, #0C0D0F);
+  border-right: 1px solid var(--steel);
+}
+
+.shell-sidebar.collapsed {
+  width: 84px;
+}
+
+.nav-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  width: 100%;
+  min-height: 46px;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 0.94rem;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.nav-link:hover {
+  color: var(--bone);
+  background: var(--raised);
+}
+
+.nav-link.active {
+  color: var(--bone);
+  background: var(--raised);
+  border-color: rgba(38, 40, 46, 0.9);
+}
+
+.nav-link.active::before {
+  content: '';
+  position: absolute;
+  left: -13px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--ember-gradient);
+  box-shadow: 0 0 14px rgba(255, 92, 26, 0.65);
+}
+
+.nav-link.active svg {
+  color: var(--ember);
+  filter: drop-shadow(0 0 6px rgba(255, 92, 26, 0.5));
+}
+
+.shell-main {
+  margin-left: 264px;
+  min-height: 100vh;
+  transition: margin-left 0.25s ease;
+}
+
+.shell-main.collapsed {
+  margin-left: 84px;
+}
+
+.shell-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1.5rem;
+  background: rgba(11, 12, 14, 0.86);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--steel);
+}
+
+/* Mobile bottom tab bar (primary navigation on phones) */
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  display: none;
+  background: rgba(16, 17, 20, 0.96);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--steel);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.tab-link {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 58px;
+  padding: 0.45rem 0.1rem;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 0.64rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.tab-link.active {
+  color: var(--ember);
+}
+
+.tab-link.active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 22%;
+  right: 22%;
+  height: 2px;
+  background: var(--ember-gradient);
+  box-shadow: 0 0 12px rgba(255, 92, 26, 0.7);
+}
+
+@media (max-width: 860px) {
+  .shell-sidebar {
+    display: none;
+  }
+
+  .shell-main,
+  .shell-main.collapsed {
+    margin-left: 0;
+  }
+
+  .tabbar {
+    display: flex;
+  }
+
+  .shell-content {
+    padding-bottom: 92px;
+  }
+
+  .shell-topbar {
+    padding: 0.7rem 1rem;
+  }
+}
+
+/* ---------- Landing ---------- */
+
+.hero-title {
+  font-family: 'Barlow Condensed', 'Inter', sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.015em;
+  line-height: 0.94;
+  font-size: clamp(3.6rem, 11vw, 7.5rem);
+}
+
+.template-card {
+  position: relative;
+  background: var(--panel);
+  border: 1px solid var(--steel);
+  border-radius: 14px;
+  padding: 1.5rem;
+  overflow: hidden;
+  transition: transform 0.18s ease, border-color 0.18s ease;
+}
+
+.template-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(255, 92, 26, 0.5);
+}
+
+.template-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--ember-gradient);
+}
+
+.template-price {
+  font-family: 'Barlow Condensed', 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 2.5rem;
+  line-height: 1;
+  color: var(--bone);
+}

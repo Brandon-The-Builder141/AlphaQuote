@@ -98,7 +98,7 @@ export default function Vendors() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white font-body overflow-hidden relative">
+      <div className="min-h-screen iron-bg text-white font-body overflow-hidden relative">
         {/* Animated Background */}
         <div
           className="absolute inset-0 opacity-[0.02] animate-pulse"
@@ -122,7 +122,7 @@ export default function Vendors() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white font-body overflow-hidden relative">
+      <div className="min-h-screen iron-bg text-white font-body overflow-hidden relative">
         {/* Animated Background */}
         <div
           className="absolute inset-0 opacity-[0.02] animate-pulse"
@@ -154,7 +154,7 @@ export default function Vendors() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white font-body overflow-hidden relative">
+    <div className="min-h-screen iron-bg text-white font-body overflow-hidden relative">
       {/* Animated Background */}
       <div
         className="absolute inset-0 opacity-[0.02] animate-pulse"

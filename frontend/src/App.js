@@ -64,7 +64,7 @@ function RootRoute() {
 
   if (!isLoaded) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
+      <div className="min-h-screen iron-bg flex items-center justify-center">
         <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
@@ -99,21 +99,21 @@ function App() {
         toastOptions={{
           className: 'font-body',
           style: {
-            background: '#1e293b',
-            color: '#fff',
-            borderRadius: '12px',
-            border: '1px solid rgba(148, 163, 184, 0.1)',
+            background: '#141519',
+            color: '#F2EFE9',
+            borderRadius: '8px',
+            border: '1px solid #26282E',
             padding: '16px'
           },
           success: {
             iconTheme: {
-              primary: '#10b981',
-              secondary: '#fff'
+              primary: '#3FB96C',
+              secondary: '#0B0C0E'
             }
           },
           error: {
             iconTheme: {
-              primary: '#ef4444',
+              primary: '#E5484D',
               secondary: '#fff'
             }
           }

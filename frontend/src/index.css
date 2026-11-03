@@ -2,18 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom AlphaQuote Styles */
+/* Custom AlphaQuote Styles — Pass Eight: values now carry the IRON
+   palette (see src/styles/theme.css for the full design system). */
 :root {
-  --primary: #14B8A6;
-  --primary-hover: #0d9488;
-  --secondary: #0F172A;
-  --neutral: #E2E8F0;
-  --accent: #F97316;
-  --accent-hover: #ea580c;
-  --card-bg: #0F172A;
-  --text-primary: #ffffff;
-  --text-secondary: #E2E8F0;
-  --text-muted: #94a3b8;
+  --primary: #FF5C1A;
+  --primary-hover: #F04A0C;
+  --secondary: #141519;
+  --neutral: #26282E;
+  --accent: #FF9E2C;
+  --accent-hover: #F08C0A;
+  --card-bg: #141519;
+  --text-primary: #F2EFE9;
+  --text-secondary: #E4E1D9;
+  --text-muted: #9BA0A6;
 }
 
 /* AlphaQuote Design System Colors */
@@ -67,7 +68,7 @@
 
 /* Glow effects */
 .hover\:glow:hover {
-  box-shadow: 0 0 20px rgba(20, 184, 166, 0.4);
+  box-shadow: 0 0 20px rgba(255, 92, 26, 0.4);
 }
 
 .hover\:glow-accent:hover {
@@ -94,12 +95,13 @@
   animation: spin 1s linear infinite;
 }
 
-/* Typography */
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap');
-
+/* Typography — fonts are loaded in public/index.html (Barlow Condensed
+   for display, Inter for UI). */
 .font-heading {
-  font-family: 'Poppins', sans-serif;
-  font-weight: 700;
+  font-family: 'Barlow Condensed', 'Inter', sans-serif;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .font-body {
@@ -108,15 +110,15 @@
 
 /* Enhanced gradient backgrounds */
 .bg-gradient-primary {
-  background: linear-gradient(135deg, #14B8A6 0%, #0d9488 100%);
+  background: linear-gradient(135deg, #FF5C1A 0%, #FF9E2C 100%);
 }
 
 .bg-gradient-accent {
-  background: linear-gradient(135deg, #F97316 0%, #ea580c 100%);
+  background: linear-gradient(135deg, #FF9E2C 0%, #FF5C1A 100%);
 }
 
 .bg-gradient-hero {
-  background: linear-gradient(135deg, #0F172A 0%, #020617 50%, #0F172A 100%);
+  background: linear-gradient(135deg, #141519 0%, #0B0C0E 50%, #141519 100%);
 }
 
 /* Premium button styles */
@@ -147,11 +149,11 @@
 }
 
 .shadow-glow-primary {
-  box-shadow: 0 0 30px rgba(20, 184, 166, 0.3);
+  box-shadow: 0 0 30px rgba(255, 92, 26, 0.3);
 }
 
 .shadow-glow-accent {
-  box-shadow: 0 0 30px rgba(249, 115, 22, 0.3);
+  box-shadow: 0 0 30px rgba(255, 158, 44, 0.3);
 }
 
 @keyframes spin {
@@ -169,10 +171,10 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--primary);
+  background: #3A3D44;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--primary-hover);
+  background: var(--primary);
 }

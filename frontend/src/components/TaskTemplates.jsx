@@ -319,7 +319,7 @@ const TaskTemplates = ({ onAddTasks, onClose }) => {
                 <FileText className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-white">Quick Templates</h2>
+                <h2 className="font-display text-[1.6rem] leading-none text-white">Quick Templates</h2>
                 <p className="text-slate-400 text-sm">Save and reuse frequently used tasks</p>
               </div>
             </div>

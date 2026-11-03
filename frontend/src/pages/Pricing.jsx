@@ -37,7 +37,7 @@ const Pricing = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen iron-bg">
       {/* Animated Background */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -inset-10 opacity-20">
@@ -54,7 +54,7 @@ const Pricing = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <h1 className="text-5xl font-bold bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent mb-6">
+          <h1 className="font-display font-bold text-6xl text-white mb-6">
             Simple, Transparent Pricing
           </h1>
           <p className="text-xl text-slate-400 max-w-2xl mx-auto">
@@ -85,7 +85,7 @@ const Pricing = () => {
               >
                 {plan.popular && (
                   <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                    <div className="bg-gradient-to-r from-primary to-blue-600 text-white px-4 py-1 rounded-full text-sm font-semibold flex items-center gap-1">
+                    <div className="bg-gradient-to-r from-primary to-accent text-white px-4 py-1 rounded-full text-sm font-semibold flex items-center gap-1">
                       <Star className="w-4 h-4" />
                       Most Popular
                     </div>
@@ -125,7 +125,7 @@ const Pricing = () => {
                   onClick={() => handlePlanClick(plan)}
                   className={`w-full py-3 px-6 rounded-xl font-semibold transition-all duration-300 ${
                     plan.popular
-                      ? 'bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 text-white'
+                      ? 'bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-blue-600/90 text-white'
                       : 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-700'
                   }`}
                   whileHover={{ scale: 1.02 }}

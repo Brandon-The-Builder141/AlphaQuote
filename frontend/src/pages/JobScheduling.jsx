@@ -83,7 +83,7 @@ const JobScheduling = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen iron-bg">
       {/* Animated Background */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -inset-10 opacity-20">
@@ -100,7 +100,7 @@ const JobScheduling = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <h1 className="text-5xl font-bold bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent mb-4">
+          <h1 className="font-display font-bold text-6xl text-white mb-4">
             Job Scheduling
           </h1>
           <p className="text-xl text-slate-400 max-w-2xl mx-auto">

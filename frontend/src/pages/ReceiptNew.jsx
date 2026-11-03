@@ -220,7 +220,7 @@ export default function ReceiptNew() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white font-body overflow-hidden relative">
+    <div className="min-h-screen iron-bg text-white font-body overflow-hidden relative">
       {/* Animated Background */}
       <div
         className="absolute inset-0 opacity-[0.02] animate-pulse"
@@ -331,8 +331,8 @@ export default function ReceiptNew() {
           )}
 
           {/* Receipt Information Form */}
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <h2 className="text-xl font-semibold text-neon-blue mb-4">
+          <div className="card p-6">
+            <h2 className="font-display text-[1.5rem] text-primary mb-4">
               {showParsedFields ? 'Parsed Receipt Information' : 'Receipt Information'}
             </h2>
 
@@ -467,7 +467,7 @@ export default function ReceiptNew() {
 
           {/* Parsed Items Preview */}
           {showParsedFields && parsedData?.items && parsedData.items.length > 0 && (
-            <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <div className="card p-6">
               <h3 className="text-lg font-semibold text-neon-blue mb-4">
                 Detected Items ({parsedData.items.length})
               </h3>

@@ -346,7 +346,7 @@ const FollowUps = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
+      <div className="min-h-screen iron-bg p-6">
         <div className="flex items-center justify-center h-64">
           <div className="flex items-center gap-3 text-slate-300">
             <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent"></div>
@@ -358,7 +358,7 @@ const FollowUps = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
+    <div className="min-h-screen iron-bg p-6">
       {/* Header */}
       <motion.div
         className="mb-8"
@@ -371,7 +371,7 @@ const FollowUps = () => {
               <Mail className="h-8 w-8 text-primary" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-white">Automated Follow-Ups</h1>
+              <h1 className="font-display text-4xl text-white">Automated Follow-Ups</h1>
               <p className="text-slate-400">Schedule and manage follow-up reminders</p>
             </div>
           </div>

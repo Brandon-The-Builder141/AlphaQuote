@@ -128,18 +128,18 @@ const ChangeOrderManager = ({
 
   const getCategoryColor = (category) => {
     const colors = {
-      'General': 'bg-slate-100 text-slate-800',
-      'Materials': 'bg-blue-100 text-blue-800',
-      'Labor': 'bg-green-100 text-green-800',
-      'Equipment': 'bg-purple-100 text-purple-800',
-      'Permits': 'bg-orange-100 text-orange-800',
-      'Other': 'bg-gray-100 text-gray-800'
+      'General': 'bg-slate-700/60 text-slate-200',
+      'Materials': 'bg-slate-800/700/15 text-blue-300',
+      'Labor': 'bg-green-500/15 text-green-300',
+      'Equipment': 'bg-purple-500/15 text-purple-300',
+      'Permits': 'bg-primary/15 text-primary',
+      'Other': 'bg-slate-700/60 text-slate-300'
     };
     return colors[category] || colors['General'];
   };
 
   return (
-    <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-white/20 shadow-xl p-6">
+    <div className="card shadow-xl p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-3">
@@ -147,7 +147,7 @@ const ChangeOrderManager = ({
             <FileText className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h3 className="text-xl font-semibold text-slate-900">Change Orders</h3>
+            <h3 className="text-xl font-semibold text-white">Change Orders</h3>
             <p className="text-sm text-slate-600">Add optional tasks or items mid-quote</p>
           </div>
         </div>
@@ -175,7 +175,7 @@ const ChangeOrderManager = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Type Selection */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
                   Type
                 </label>
                 <div className="flex space-x-2">
@@ -184,8 +184,8 @@ const ChangeOrderManager = ({
                     onClick={() => setNewChangeOrder(prev => ({ ...prev, type: 'task' }))}
                     className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                       newChangeOrder.type === 'task'
-                        ? 'bg-blue-500 text-white shadow-lg'
-                        : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
+                        ? 'bg-ember-gradient text-[#1A0E06] shadow-ember-glow-sm'
+                        : 'bg-slate-800 text-slate-200 border border-slate-600 hover:bg-slate-700'
                     }`}
                   >
                     <Hammer className="w-4 h-4" />
@@ -196,8 +196,8 @@ const ChangeOrderManager = ({
                     onClick={() => setNewChangeOrder(prev => ({ ...prev, type: 'item' }))}
                     className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                       newChangeOrder.type === 'item'
-                        ? 'bg-blue-500 text-white shadow-lg'
-                        : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
+                        ? 'bg-ember-gradient text-[#1A0E06] shadow-ember-glow-sm'
+                        : 'bg-slate-800 text-slate-200 border border-slate-600 hover:bg-slate-700'
                     }`}
                   >
                     <Package className="w-4 h-4" />
@@ -208,13 +208,13 @@ const ChangeOrderManager = ({
 
               {/* Category */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
                   Category
                 </label>
                 <select
                   value={newChangeOrder.category}
                   onChange={(e) => setNewChangeOrder(prev => ({ ...prev, category: e.target.value }))}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="General">General</option>
                   <option value="Materials">Materials</option>
@@ -227,21 +227,21 @@ const ChangeOrderManager = ({
 
               {/* Description */}
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-slate-700 mb-2">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
                   Description *
                 </label>
                 <textarea
                   value={newChangeOrder.description}
                   onChange={(e) => setNewChangeOrder(prev => ({ ...prev, description: e.target.value }))}
                   placeholder="Describe the task or item to be added..."
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  className="w-full px-3 py-2 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                   rows={2}
                 />
               </div>
 
               {/* Quantity and Unit */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
                   Quantity
                 </label>
                 <div className="flex space-x-2">
@@ -251,21 +251,21 @@ const ChangeOrderManager = ({
                     step="0.1"
                     value={newChangeOrder.quantity}
                     onChange={(e) => setNewChangeOrder(prev => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))}
-                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="flex-1 px-3 py-2 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                   <input
                     type="text"
                     value={newChangeOrder.unit}
                     onChange={(e) => setNewChangeOrder(prev => ({ ...prev, unit: e.target.value }))}
                     placeholder="Unit"
-                    className="w-20 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-20 px-3 py-2 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
               </div>
 
               {/* Unit Price */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
                   Unit Price
                 </label>
                 <div className="relative">
@@ -276,7 +276,7 @@ const ChangeOrderManager = ({
                     step="0.01"
                     value={newChangeOrder.unitPrice}
                     onChange={(e) => setNewChangeOrder(prev => ({ ...prev, unitPrice: parseFloat(e.target.value) || 0 }))}
-                    className="w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full pl-10 pr-3 py-2 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="0.00"
                   />
                 </div>
@@ -284,7 +284,7 @@ const ChangeOrderManager = ({
 
               {/* Labor Hours */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
                   Labor Hours
                 </label>
                 <div className="relative">
@@ -295,7 +295,7 @@ const ChangeOrderManager = ({
                     step="0.1"
                     value={newChangeOrder.laborHours}
                     onChange={(e) => setNewChangeOrder(prev => ({ ...prev, laborHours: parseFloat(e.target.value) || 0 }))}
-                    className="w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full pl-10 pr-3 py-2 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="0.0"
                   />
                 </div>
@@ -303,7 +303,7 @@ const ChangeOrderManager = ({
 
               {/* Labor Rate */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
                   Labor Rate ($/hr)
                 </label>
                 <div className="relative">
@@ -314,7 +314,7 @@ const ChangeOrderManager = ({
                     step="0.01"
                     value={newChangeOrder.laborRate}
                     onChange={(e) => setNewChangeOrder(prev => ({ ...prev, laborRate: parseFloat(e.target.value) || 0 }))}
-                    className="w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full pl-10 pr-3 py-2 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="75.00"
                   />
                 </div>
@@ -322,14 +322,14 @@ const ChangeOrderManager = ({
 
               {/* Notes */}
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-slate-700 mb-2">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
                   Notes
                 </label>
                 <textarea
                   value={newChangeOrder.notes}
                   onChange={(e) => setNewChangeOrder(prev => ({ ...prev, notes: e.target.value }))}
                   placeholder="Additional notes or specifications..."
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  className="w-full px-3 py-2 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                   rows={2}
                 />
               </div>
@@ -340,7 +340,7 @@ const ChangeOrderManager = ({
               <button
                 type="button"
                 onClick={() => setShowAddForm(false)}
-                className="px-4 py-2 text-slate-600 hover:text-slate-800 transition-colors"
+                className="px-4 py-2 text-slate-600 hover:text-slate-100 transition-colors"
               >
                 Cancel
               </button>
@@ -372,7 +372,7 @@ const ChangeOrderManager = ({
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="bg-white/60 backdrop-blur-sm rounded-xl border border-white/20 p-4 hover:shadow-lg transition-all duration-200"
+              className="bg-slate-800/60 backdrop-blur-sm rounded-xl border border-white/20 p-4 hover:shadow-lg transition-all duration-200"
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
@@ -386,7 +386,7 @@ const ChangeOrderManager = ({
                     </span>
                   </div>
 
-                  <h4 className="font-medium text-slate-900 mb-2">
+                  <h4 className="font-medium text-white mb-2">
                     {changeOrder.description}
                   </h4>
 
@@ -410,8 +410,8 @@ const ChangeOrderManager = ({
                   </div>
 
                   {changeOrder.notes && (
-                    <div className="mt-2 p-2 bg-slate-50 rounded-lg">
-                      <p className="text-sm text-slate-700">{changeOrder.notes}</p>
+                    <div className="mt-2 p-2 bg-slate-800 rounded-lg">
+                      <p className="text-sm text-slate-300">{changeOrder.notes}</p>
                     </div>
                   )}
                 </div>
@@ -421,7 +421,7 @@ const ChangeOrderManager = ({
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
                     onClick={() => setEditingId(changeOrder.id)}
-                    className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                    className="p-2 text-slate-600 hover:text-blue-600 hover:bg-slate-800/70 rounded-lg transition-all"
                   >
                     <Edit3 className="w-4 h-4" />
                   </motion.button>
@@ -446,7 +446,7 @@ const ChangeOrderManager = ({
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <CheckCircle className="w-5 h-5 text-green-600" />
-              <span className="font-medium text-slate-900">
+              <span className="font-medium text-white">
                 {changeOrders.length} Change Order{changeOrders.length !== 1 ? 's' : ''} Added
               </span>
             </div>

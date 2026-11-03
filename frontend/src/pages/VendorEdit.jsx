@@ -95,7 +95,7 @@ export default function VendorEdit() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white font-body flex items-center justify-center">
+      <div className="min-h-screen iron-bg text-white font-body flex items-center justify-center">
         <motion.div
           className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"
           animate={{ rotate: 360 }}
@@ -107,7 +107,7 @@ export default function VendorEdit() {
 
   if (loadError) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white font-body">
+      <div className="min-h-screen iron-bg text-white font-body">
         <div className="max-w-4xl mx-auto p-8 text-center">
           <p className="text-red-400 mb-4 font-body">{loadError}</p>
           <button
@@ -122,7 +122,7 @@ export default function VendorEdit() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white font-body overflow-hidden relative">
+    <div className="min-h-screen iron-bg text-white font-body overflow-hidden relative">
       <div
         className="absolute inset-0 opacity-[0.02] animate-pulse"
         style={{
