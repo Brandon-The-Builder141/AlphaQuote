@@ -1,272 +1,204 @@
+/**
+ * One-Time Company Setup (live fixes, 2026-11-02)
+ *
+ * This replaces the old six-step SetupWizard AND the separate
+ * ProfileSetup form. New users used to be run through BOTH — the
+ * wizard auto-showed on first load (tracked in localStorage) and
+ * ProtectedRoute also bounced them to /profile-setup until a Clerk
+ * metadata flag was set (tracked in Clerk). Two systems, two stores,
+ * company info asked twice.
+ *
+ * Now there is exactly one setup: this page. It asks only for company
+ * basics, posts them to POST /api/users/setup, and the server stamps
+ * completion on the User row. ProtectedRoute reads that stamp via
+ * /api/users/me, so setup runs exactly once per user — across
+ * browsers, devices, and re-logins.
+ *
+ * Trimmed from the old wizard: Modules, Data Import, Branding, and
+ * Confirmation steps. None of them were needed to start quoting —
+ * module toggles and branding live on in the app's own settings, and
+ * the company name/phone/address they duplicated are collected here.
+ */
+
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-  CheckCircle,
-  X,
-  Building2,
-  Settings,
-  Upload,
-  Palette,
-  CheckSquare,
-  Rocket
-} from 'lucide-react';
+import { motion } from 'framer-motion';
+import { useUser } from '@clerk/clerk-react';
+import { useNavigate } from 'react-router-dom';
+import { Building2, CheckCircle } from 'lucide-react';
+import { completeSetup, getProvisioningState } from '../services/provisioning';
 
-// Import step components
-import CompanyInfoStep from './wizard/CompanyInfoStep';
-import ModuleSelectionStep from './wizard/ModuleSelectionStep';
-import DataImportStep from './wizard/DataImportStep';
-import BrandingStep from './wizard/BrandingStep';
-import ConfirmationStep from './wizard/ConfirmationStep';
-import LaunchStep from './wizard/LaunchStep';
+const SetupWizard = () => {
+  const { user } = useUser();
+  const navigate = useNavigate();
 
-const SetupWizard = ({ onComplete, onSkip, initialData = null }) => {
-  const [currentStep, setCurrentStep] = useState(1);
-  const [wizardData, setWizardData] = useState({
-    companyInfo: initialData?.companyInfo || {},
-    modules: initialData?.modules || {},
-    dataImport: initialData?.dataImport || {},
-    branding: initialData?.branding || {}
+  const account = getProvisioningState()?.contractorAccount;
+  const email = user?.emailAddresses?.[0]?.emailAddress || account?.email || '';
+
+  const [formData, setFormData] = useState({
+    // Provisioning auto-names the starter account "<First> <Last>
+    // Company" — don't present that placeholder as the user's company.
+    companyName: account?.name && !/ Company$/.test(account.name) ? account.name : '',
+    phone: account?.phone || '',
+    address: account?.address || ''
   });
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState(null);
 
-  const totalSteps = 6;
-  const stepTitles = [
-    'Company Info',
-    'Modules',
-    'Data Import',
-    'Branding',
-    'Confirmation',
-    'Launch'
-  ];
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
-  const stepIcons = [
-    Building2,
-    Settings,
-    Upload,
-    Palette,
-    CheckSquare,
-    Rocket
-  ];
+  const finish = async (basics) => {
+    setIsSaving(true);
+    setError(null);
+    try {
+      await completeSetup(basics);
 
-  const handleNext = () => {
-    if (currentStep < totalSteps) {
-      setCurrentStep(currentStep + 1);
+      // Compatibility for Profile.jsx, which still reads company info
+      // from these localStorage keys.
+      const companyInfo = {
+        companyName: basics.companyName || '',
+        phone: basics.phone || '',
+        email,
+        address: basics.address || ''
+      };
+      localStorage.setItem(
+        'alphaquote_wizard_data',
+        JSON.stringify({ companyInfo, completedAt: new Date().toISOString(), version: '2.0' })
+      );
+      localStorage.setItem('alphaquote_wizard_completed', 'true');
+      localStorage.setItem(
+        'alphaquote_profile',
+        JSON.stringify({ ...companyInfo, profileCompleted: true, savedAt: new Date().toISOString() })
+      );
+
+      navigate('/dashboard', { replace: true });
+    } catch (err) {
+      console.error('Error completing setup:', err);
+      setError('Something went wrong saving your setup. Your answers are still here — please try again.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handleBack = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
-    }
-  };
-
-  const handleStepData = (stepNumber, data) => {
-    const stepKey = getStepKey(stepNumber);
-    setWizardData(prev => ({
-      ...prev,
-      [stepKey]: data
-    }));
-  };
-
-  const getStepKey = (stepNumber) => {
-    const keys = ['companyInfo', 'modules', 'dataImport', 'branding'];
-    return keys[stepNumber - 1] || 'companyInfo';
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    finish(formData);
   };
 
   const handleSkip = () => {
-    onSkip();
-  };
-
-  const handleFinish = () => {
-    // Create complete wizard data object
-    const completeWizardData = {
-      companyInfo: wizardData.companyInfo,
-      modules: wizardData.modules,
-      dataImport: wizardData.dataImport,
-      branding: wizardData.branding,
-      completedAt: new Date().toISOString(),
-      version: '1.0'
-    };
-
-    // Save wizard data to localStorage
-    localStorage.setItem('alphaquote_wizard_data', JSON.stringify(completeWizardData));
-    localStorage.setItem('alphaquote_wizard_completed', 'true');
-
-    // Apply branding immediately
-    applyBranding(wizardData.branding);
-
-    // Apply module visibility settings
-    applyModuleSettings(wizardData.modules);
-
-    onComplete(completeWizardData);
-  };
-
-  const applyBranding = (branding) => {
-    if (branding.primaryColor) {
-      document.documentElement.style.setProperty('--primary', branding.primaryColor);
-    }
-    if (branding.secondaryColor) {
-      document.documentElement.style.setProperty('--secondary', branding.secondaryColor);
-    }
-    if (branding.accentColor) {
-      document.documentElement.style.setProperty('--accent', branding.accentColor);
-    }
-  };
-
-  const applyModuleSettings = (modules) => {
-    // Store module settings for use throughout the app
-    localStorage.setItem('alphaquote_enabled_modules', JSON.stringify(modules.selectedModules || {}));
-  };
-
-  const renderStep = () => {
-    const stepProps = {
-      data: wizardData[getStepKey(currentStep)] || {},
-      onDataChange: (data) => handleStepData(currentStep, data),
-      onNext: handleNext,
-      onBack: handleBack
-    };
-
-    switch (currentStep) {
-      case 1:
-        return <CompanyInfoStep {...stepProps} />;
-      case 2:
-        return <ModuleSelectionStep {...stepProps} />;
-      case 3:
-        return <DataImportStep {...stepProps} />;
-      case 4:
-        return <BrandingStep {...stepProps} />;
-      case 5:
-        return <ConfirmationStep {...stepProps} wizardData={wizardData} />;
-      case 6:
-        return <LaunchStep {...stepProps} wizardData={wizardData} onFinish={handleFinish} />;
-      default:
-        return <CompanyInfoStep {...stepProps} />;
-    }
+    // Skipping still completes setup (with whatever is filled in, even
+    // nothing) — the gate must never fire twice.
+    finish(formData);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white font-body overflow-hidden relative">
-      {/* Animated Background */}
-      <div
-        className="absolute inset-0 opacity-[0.02] animate-pulse"
-        style={{
-          backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'1\'%3E%3Ccircle cx=\'30\' cy=\'30\' r=\'1\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")'
-        }}
-      ></div>
-
-      {/* Floating Particles */}
-      {[...Array(30)].map((_, i) => (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+      <div className="relative z-10 container mx-auto px-4 py-16">
         <motion.div
-          key={i}
-          className="absolute w-1 h-1 bg-primary/20 rounded-full"
-          style={{
-            left: `${Math.random() * 100}%`,
-            top: `${Math.random() * 100}%`
-          }}
-          animate={{
-            y: [0, -30, 0],
-            opacity: [0.2, 0.8, 0.2]
-          }}
-          transition={{
-            duration: 3 + Math.random() * 2,
-            repeat: Infinity,
-            delay: Math.random() * 2
-          }}
-        />
-      ))}
-
-      <div className="relative min-h-screen flex flex-col">
-        {/* Header */}
-        <motion.div
-          className="bg-slate-950/80 backdrop-blur-xl border-b border-slate-800/50 p-6"
-          initial={{ opacity: 0, y: -20 }}
+          className="max-w-2xl mx-auto"
+          initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <div className="max-w-4xl mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <motion.div
-                animate={{ rotate: [0, 10, -10, 0] }}
-                transition={{ duration: 2, repeat: Infinity }}
-              >
-                <Building2 className="w-8 h-8 text-primary" />
-              </motion.div>
-              <div>
-                <h1 className="text-2xl font-heading text-white">AlphaQuote Setup</h1>
-                <p className="text-slate-300 font-body">Let's get your account configured</p>
-              </div>
-            </div>
-
-            <motion.button
-              onClick={handleSkip}
-              className="text-slate-400 hover:text-white transition-colors duration-300 flex items-center gap-2"
-              whileHover={{ x: -4 }}
+          <div className="text-center mb-10">
+            <motion.div
+              className="inline-flex items-center justify-center w-16 h-16 bg-primary/20 rounded-2xl mb-6"
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
             >
-              <X className="w-4 h-4" />
-              Skip Setup
-            </motion.button>
+              <Building2 className="w-8 h-8 text-primary" />
+            </motion.div>
+            <h1 className="text-3xl font-bold text-white mb-2">Set up your company</h1>
+            <p className="text-slate-400">
+              One quick step — this is the only time we'll ask. It puts your company
+              details on every quote you send.
+            </p>
           </div>
-        </motion.div>
 
-        {/* Stepper */}
-        <motion.div
-          className="bg-slate-900/50 backdrop-blur-sm border-b border-slate-800/50 p-6"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
-        >
-          <div className="max-w-4xl mx-auto">
-            <div className="flex items-center justify-between">
-              {stepTitles.map((title, index) => {
-                const stepNumber = index + 1;
-                const isActive = currentStep === stepNumber;
-                const isCompleted = currentStep > stepNumber;
-                const Icon = stepIcons[index];
-
-                return (
-                  <div key={stepNumber} className="flex items-center">
-                    <motion.div
-                      className={`flex items-center gap-3 px-4 py-2 rounded-xl transition-all duration-300 ${
-                        isActive
-                          ? 'bg-primary/20 text-primary border border-primary/30'
-                          : isCompleted
-                            ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                            : 'bg-slate-800/50 text-slate-400 border border-slate-700/50'
-                      }`}
-                      animate={isActive ? { scale: 1.05 } : { scale: 1 }}
-                    >
-                      <Icon className="w-4 h-4" />
-                      <span className="font-body text-sm font-medium">{title}</span>
-                      {isCompleted && <CheckCircle className="w-4 h-4" />}
-                    </motion.div>
-
-                    {index < stepTitles.length - 1 && (
-                      <div className={`w-8 h-px mx-2 ${
-                        isCompleted ? 'bg-green-500' : 'bg-slate-700'
-                      }`} />
-                    )}
-                  </div>
-                );
-              })}
+          <form
+            onSubmit={handleSubmit}
+            className="bg-slate-800/60 border border-slate-700 rounded-2xl p-8 space-y-5"
+          >
+            <div>
+              <label htmlFor="companyName" className="block text-sm font-medium text-slate-300 mb-2">
+                Company name
+              </label>
+              <input
+                id="companyName"
+                name="companyName"
+                type="text"
+                value={formData.companyName}
+                onChange={handleInputChange}
+                placeholder="e.g. Iron Legion Contracting"
+                className="w-full bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-primary"
+              />
             </div>
-          </div>
-        </motion.div>
 
-        {/* Step Content */}
-        <div className="flex-1 flex items-center justify-center p-8">
-          <div className="w-full max-w-4xl">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={currentStep}
-                initial={{ opacity: 0, x: 50 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -50 }}
-                transition={{ duration: 0.3 }}
+            <div>
+              <label htmlFor="phone" className="block text-sm font-medium text-slate-300 mb-2">
+                Phone
+              </label>
+              <input
+                id="phone"
+                name="phone"
+                type="tel"
+                value={formData.phone}
+                onChange={handleInputChange}
+                placeholder="(555) 123-4567"
+                className="w-full bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-primary"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="address" className="block text-sm font-medium text-slate-300 mb-2">
+                Business address
+              </label>
+              <input
+                id="address"
+                name="address"
+                type="text"
+                value={formData.address}
+                onChange={handleInputChange}
+                placeholder="Street, City, State ZIP"
+                className="w-full bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-primary"
+              />
+            </div>
+
+            {email && (
+              <p className="text-sm text-slate-500">
+                Signed in as {email} — quotes and receipts are saved to this account.
+              </p>
+            )}
+
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/40 text-red-300 rounded-xl px-4 py-3 text-sm">
+                {error}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-2">
+              <button
+                type="button"
+                onClick={handleSkip}
+                disabled={isSaving}
+                className="text-slate-400 hover:text-white font-medium px-4 py-3 transition-colors disabled:opacity-50"
               >
-                {renderStep()}
-              </motion.div>
-            </AnimatePresence>
-          </div>
-        </div>
+                Skip for now
+              </button>
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-white font-semibold px-6 py-3 rounded-xl transition-colors disabled:opacity-50"
+              >
+                <CheckCircle className="w-5 h-5" />
+                {isSaving ? 'Saving...' : 'Save & start quoting'}
+              </button>
+            </div>
+          </form>
+        </motion.div>
       </div>
     </div>
   );

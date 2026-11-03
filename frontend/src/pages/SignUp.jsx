@@ -70,7 +70,7 @@ const SignUpPage = () => {
                   identityPreviewEditButton: 'text-primary hover:text-primary/80'
                 }
               }}
-              redirectUrl="/profile-setup"
+              redirectUrl="/dashboard"
               signInUrl="/sign-in"
             />
           </div>

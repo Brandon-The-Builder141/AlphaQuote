@@ -1,6 +1,6 @@
 
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import { Toaster } from 'react-hot-toast';
 import ClerkProviderWrapper from './components/ClerkProvider';
@@ -30,15 +30,10 @@ import JobScheduling from './pages/JobScheduling';
 import SignIn from './pages/SignIn';
 import SignUp from './pages/SignUp';
 import DemoMode from './pages/DemoMode';
-import ProfileSetup from './components/ProfileSetup';
 import Pricing from './pages/Pricing';
 import Landing from './pages/Landing';
 import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
-
-// Paths a logged-out visitor can land on. The first-run SetupWizard must not
-// hijack these — it is an in-app onboarding step, reachable at /setup.
-const PUBLIC_PATHS = ['/', '/pricing', '/terms', '/privacy', '/sign-in', '/sign-up', '/demo'];
 
 /**
  * Root route: signed-in users get the app (unchanged behavior);
@@ -79,9 +74,6 @@ function RootRoute() {
 }
 
 function App() {
-  const [showWizard, setShowWizard] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-
   useEffect(() => {
     // Validate environment configuration
     const isValidEnv = validateEnv();
@@ -93,70 +85,11 @@ function App() {
     if (process.env.NODE_ENV === 'development') {
       logConfig();
     }
-
-    // Check if wizard has been completed or skipped
-    const wizardCompleted = localStorage.getItem('alphaquote_wizard_completed');
-    const wizardSkipped = localStorage.getItem('alphaquote_wizard_skipped');
-    const isFirstTime = !wizardCompleted && !wizardSkipped;
-
-    // Only auto-show the setup wizard inside the app — never on public
-    // marketing/legal pages, where it would block logged-out visitors.
-    if (isFirstTime && !PUBLIC_PATHS.includes(window.location.pathname)) {
-      setShowWizard(true);
-    }
-
-    setIsLoading(false);
   }, []);
 
-  const handleWizardComplete = (wizardData) => {
-    // Apply branding from wizard data
-    if (wizardData.branding?.primaryColor) {
-      document.documentElement.style.setProperty('--primary', wizardData.branding.primaryColor);
-    }
-    if (wizardData.branding?.secondaryColor) {
-      document.documentElement.style.setProperty('--secondary', wizardData.branding.secondaryColor);
-    }
-    if (wizardData.branding?.accentColor) {
-      document.documentElement.style.setProperty('--accent', wizardData.branding.accentColor);
-    }
-
-    setShowWizard(false);
-    // No need to redirect - React Router will handle the routing
-  };
-
-  const handleWizardSkip = () => {
-    // Set wizard as skipped in localStorage
-    localStorage.setItem('alphaquote_wizard_completed', 'skipped');
-    localStorage.setItem('alphaquote_wizard_skipped', 'true');
-
-    setShowWizard(false);
-    // No need to redirect - React Router will handle the routing
-  };
-
-  const loadWizardData = () => {
-    try {
-      const storedData = localStorage.getItem('alphaquote_wizard_data');
-      return storedData ? JSON.parse(storedData) : null;
-    } catch (error) {
-      console.error('Error loading wizard data:', error);
-      return null;
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-white font-body">Loading AlphaQuote...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (showWizard) {
-    return <SetupWizard onComplete={handleWizardComplete} onSkip={handleWizardSkip} />;
-  }
+  // First-run setup is gated by ProtectedRoute (server-side completion
+  // stamp), not by an app-level overlay — the old overlay plus the old
+  // /profile-setup redirect ran new users through setup twice.
 
   return (
     <ClerkProviderWrapper>
@@ -195,7 +128,7 @@ function App() {
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
-          <Route path="/profile-setup" element={<ProfileSetup />} />
+          <Route path="/profile-setup" element={<Navigate to="/setup" replace />} />
 
           {/* Protected Routes with Layout */}
           <Route path="/dashboard" element={
@@ -325,7 +258,11 @@ function App() {
             </ProtectedRoute>
           } />
           <Route path="/receipt-parser-test" element={<ReceiptParserTest />} />
-          <Route path="/setup" element={<SetupWizard onComplete={handleWizardComplete} onSkip={handleWizardSkip} initialData={loadWizardData()} />} />
+          <Route path="/setup" element={
+            <ProtectedRoute>
+              <SetupWizard />
+            </ProtectedRoute>
+          } />
         </Routes>
       </Router>
     </ClerkProviderWrapper>
