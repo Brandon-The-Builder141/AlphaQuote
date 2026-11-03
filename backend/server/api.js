@@ -12,6 +12,10 @@ const { resolveTenant, scopeWhere } = require('../middleware/tenant');
 const { escapeHtml, sanitizeHeaderValue } = require('../utils/escapeHtml');
 const { Webhook } = require('svix');
 const userService = require('../services/userService');
+// Pass Five (Iron Legion tailoring): editable pricing/catalog defaults —
+// labor rates, quote terms, company display name. See that module for
+// the source of the numbers (Iron Legion pricing sheet, Oct 2026).
+const pricingDefaults = require('../config/pricingDefaults');
 
 // Data routes require a verified Clerk identity AND a provisioned tenant.
 const requireTenantAuth = [authenticateUser, resolveTenant];
@@ -868,11 +872,29 @@ app.post('/api/email-quote', authenticateUser, async (req, res) => {
       total: escapeHtml(quoteData.total)
     };
 
+    // Pass Five: the quote carries the sender's own company name.
+    // Resolve it from the caller's provisioned contractor account;
+    // fall back to the Iron Legion default when there is no account
+    // row to read (e.g. the identity has not been provisioned yet).
+    let companyName = pricingDefaults.COMPANY_DISPLAY_NAME;
+    try {
+      const meResult = await userService.getUserByClerkId(req.user.id);
+      if (meResult.success && meResult.data.contractorAccount?.name) {
+        companyName = meResult.data.contractorAccount.name;
+      }
+    } catch (lookupError) {
+      console.log('Company name lookup failed, using default:', lookupError.message);
+    }
+    const safeCompanyName = escapeHtml(companyName);
+    const termsHtml = pricingDefaults.QUOTE_TERMS
+      .map((term) => `<p style="margin: 4px 0;">${escapeHtml(term)}</p>`)
+      .join('');
+
     // Format the quote data into HTML email
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
         <div style="text-align: center; margin-bottom: 30px;">
-          <h1 style="color: #00d4ff; font-size: 28px; margin-bottom: 10px;">🧮 AlphaQuote Estimate</h1>
+          <h1 style="color: #00d4ff; font-size: 28px; margin-bottom: 10px;">🧮 ${safeCompanyName} Estimate</h1>
           <p style="color: #666; font-size: 16px;">Professional Construction Estimate</p>
           <p style="color: #999; font-size: 14px;">Date: ${new Date().toLocaleDateString()}</p>
         </div>
@@ -936,8 +958,8 @@ app.post('/api/email-quote', authenticateUser, async (req, res) => {
         </div>
 
         <div style="text-align: center; color: #666; font-size: 14px; margin-top: 30px;">
-          <p>Thank you for choosing AlphaQuote for your construction needs.</p>
-          <p>This estimate is valid for 30 days from the date above.</p>
+          <p>Thank you for choosing ${safeCompanyName} for your construction needs.</p>
+          ${termsHtml}
         </div>
 
         <div style="margin-top: 30px; padding: 20px; background-color: #f9f9f9; border-radius: 8px;">
@@ -1191,8 +1213,54 @@ app.get('/api/user-regional-selection', authenticateUser, async (req, res) => {
 });
 
 // Task Template Routes
+// Pass Five landing addendum: the starter-template library must exist in
+// every environment, but the demo seed (prisma/seed.js) wipes data and must
+// never run in production. So the public library self-populates lazily:
+// the first template-list request in a database with no public templates
+// creates the Iron Legion starters from config (public, system-owned).
+// Idempotent (count-guarded) and concurrency-safe (shared in-flight promise;
+// a failure resets the guard so a later request can retry).
+let starterTemplatesPromise = null;
+function ensureStarterTemplates() {
+  if (!starterTemplatesPromise) {
+    starterTemplatesPromise = (async () => {
+      const existing = await prisma.taskTemplate.count({ where: { isPublic: true } });
+      if (existing > 0) return;
+      for (const t of pricingDefaults.STARTER_TEMPLATES) {
+        await prisma.taskTemplate.create({
+          data: {
+            name: t.name,
+            description: t.description,
+            category: t.category,
+            isPublic: true,
+            userId: 'system',
+            tasks: {
+              create: t.tasks.map((task, index) => ({
+                name: task.name,
+                description: task.description,
+                category: task.category,
+                unit: task.unit,
+                quantity: task.quantity,
+                unitPrice: task.unitPrice,
+                totalPrice: task.quantity * task.unitPrice,
+                sortOrder: index
+              }))
+            }
+          }
+        });
+      }
+      console.log(`📋 Starter template library created (${pricingDefaults.STARTER_TEMPLATES.length} templates)`);
+    })().catch((error) => {
+      console.error('Starter template ensure failed:', error.message);
+      starterTemplatesPromise = null;
+    });
+  }
+  return starterTemplatesPromise;
+}
+
 app.get('/api/task-templates', requireTenantAuth, async (req, res) => {
   try {
+    await ensureStarterTemplates();
     const { category } = req.query;
 
     // Visible set (Pass Two): public templates plus the caller's own
@@ -1979,7 +2047,7 @@ function calculateRoomCost(room) {
   const sqft = parseFloat(room.sqft) || 0;
   const materialCostPerSqft = parseFloat(room.materialCost) || 0;
   const laborHours = parseFloat(room.laborHours) || 0;
-  const laborRate = parseFloat(room.laborRate) || 75.00; // $75/hour default
+  const laborRate = parseFloat(room.laborRate) || pricingDefaults.SOLO_LABOR_RATE; // Iron Legion solo rate, $60/hour default
 
   // Calculate base costs
   const materialTotal = sqft * materialCostPerSqft;

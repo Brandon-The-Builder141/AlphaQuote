@@ -26,6 +26,7 @@ import { useUser } from '@clerk/clerk-react';
 import { useNavigate } from 'react-router-dom';
 import { Building2, CheckCircle } from 'lucide-react';
 import { completeSetup, getProvisioningState } from '../services/provisioning';
+import { COMPANY_LEGAL_NAME } from '../config/site';
 
 const SetupWizard = () => {
   const { user } = useUser();
@@ -37,7 +38,10 @@ const SetupWizard = () => {
   const [formData, setFormData] = useState({
     // Provisioning auto-names the starter account "<First> <Last>
     // Company" — don't present that placeholder as the user's company.
-    companyName: account?.name && !/ Company$/.test(account.name) ? account.name : '',
+    // Pass Five: default the company name to Iron Legion Contracting
+    // LLC (this deployment is Iron Legion's own tool) whenever the
+    // account still carries its auto-generated placeholder name.
+    companyName: account?.name && !/ Company$/.test(account.name) ? account.name : COMPANY_LEGAL_NAME,
     phone: account?.phone || '',
     address: account?.address || ''
   });
@@ -132,7 +136,7 @@ const SetupWizard = () => {
                 type="text"
                 value={formData.companyName}
                 onChange={handleInputChange}
-                placeholder="e.g. Iron Legion Contracting"
+                placeholder={COMPANY_LEGAL_NAME}
                 className="w-full bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-primary"
               />
             </div>

@@ -487,15 +487,14 @@ export default function Profile() {
                   className="w-full bg-slate-800/50 border border-slate-700/50 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200 font-body"
                 >
                   <option value="">Select your industry</option>
-                  <option value="Construction">Construction</option>
-                  <option value="Renovation">Renovation</option>
-                  <option value="Flooring">Flooring</option>
-                  <option value="Roofing">Roofing</option>
-                  <option value="Plumbing">Plumbing</option>
-                  <option value="Electrical">Electrical</option>
-                  <option value="HVAC">HVAC</option>
+                  {/* Pass Five (Iron Legion tailoring): the picker lists
+                      Iron Legion's six trades — no plumbing/electrical. */}
+                  <option value="Siding">Siding</option>
+                  <option value="Fencing">Fencing</option>
+                  <option value="Decking">Decking</option>
+                  <option value="Framing">Framing</option>
                   <option value="Landscaping">Landscaping</option>
-                  <option value="Painting">Painting</option>
+                  <option value="Flooring">Flooring</option>
                   <option value="General Contracting">General Contracting</option>
                   <option value="Other">Other</option>
                 </select>

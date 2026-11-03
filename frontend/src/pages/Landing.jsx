@@ -18,9 +18,12 @@ import {
   BellRing
 } from 'lucide-react';
 import { PRICING_TIERS } from '../config/pricing';
-import { PRODUCT_NAME } from '../config/site';
+import { COMPANY_NAME } from '../config/site';
 
-const TRADES = ['Siding', 'Fencing', 'Decking', 'Framing', 'Flooring', 'General remodeling'];
+// Pass Five (Iron Legion tailoring): this is Iron Legion Contracting's
+// own site and quoting tool. The trades listed are the six Iron Legion
+// actually does — no plumbing, no electrical.
+const TRADES = ['Siding', 'Fencing', 'Decking', 'Framing', 'Landscaping', 'Flooring'];
 
 const STEPS = [
   {
@@ -36,7 +39,7 @@ const STEPS = [
   {
     icon: Send,
     title: 'Send it like a pro',
-    text: 'Your customer gets a clean, professional PDF quote. AlphaQuote reminds you to follow up until you hear back.'
+    text: 'The customer gets a clean, professional PDF quote, good for 14 days. Follow-up reminders keep the bid alive until we hear back.'
   }
 ];
 
@@ -49,7 +52,7 @@ const Landing = () => {
       <header className="relative z-10 max-w-6xl mx-auto flex items-center justify-between px-4 py-6">
         <div className="flex items-center gap-2">
           <Hammer className="w-7 h-7 text-primary" />
-          <span className="text-2xl font-bold">{PRODUCT_NAME}</span>
+          <span className="text-2xl font-bold">{COMPANY_NAME}</span>
         </div>
         <nav className="flex items-center gap-3">
           <Link to="/pricing" className="hidden sm:inline text-slate-300 hover:text-white px-3 py-2">
@@ -75,9 +78,9 @@ const Landing = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          Fast, professional quotes
+          Built right,
           <span className="block bg-gradient-to-r from-primary to-blue-400 bg-clip-text text-transparent">
-            for contractors
+            quoted straight
           </span>
         </motion.h1>
         <motion.p
@@ -86,8 +89,10 @@ const Landing = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.1 }}
         >
-          Build a quote on the job site, price it with real material costs, and send a
-          clean PDF before you leave the driveway. No spreadsheets, no guesswork.
+          Iron Legion Contracting is a builder in Northwest Ohio — siding, fencing,
+          decking, framing, landscaping, and flooring. Every job is quoted line by
+          line from real material costs, and the customer gets a clean PDF before
+          we leave the driveway. No spreadsheets, no guesswork.
         </motion.p>
         <motion.div
           className="flex flex-col sm:flex-row items-center justify-center gap-4"
@@ -109,10 +114,10 @@ const Landing = () => {
 
       {/* Who it's for */}
       <section className="relative z-10 max-w-6xl mx-auto px-4 pb-20">
-        <h2 className="text-3xl font-bold text-center mb-4">Built for the trades</h2>
+        <h2 className="text-3xl font-bold text-center mb-4">What we build</h2>
         <p className="text-slate-400 text-center max-w-2xl mx-auto mb-8">
-          If you run a truck, a crew, or both — and quoting eats your evenings —
-          AlphaQuote was made for you.
+          Six trades, done by our own crew. If a job needs plumbing or electrical,
+          we will tell you straight — that is not work we do.
         </p>
         <div className="flex flex-wrap justify-center gap-3">
           {TRADES.map((trade) => (
@@ -212,7 +217,7 @@ const Landing = () => {
       {/* Final CTA */}
       <section className="relative z-10 max-w-4xl mx-auto px-4 pb-20 text-center">
         <h2 className="text-3xl font-bold mb-4">Your next quote could take five minutes.</h2>
-        <p className="text-slate-400 mb-8">Create a free account and send your first professional quote today.</p>
+        <p className="text-slate-400 mb-8">Sign in and build the quote on the spot — priced right, written down, and sent before the truck door closes.</p>
         <button
           onClick={() => navigate('/sign-up')}
           className="bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 text-white font-semibold px-8 py-4 rounded-xl text-lg inline-flex items-center gap-2 transition-all"
@@ -224,7 +229,7 @@ const Landing = () => {
       {/* Footer */}
       <footer className="relative z-10 border-t border-slate-800/60">
         <div className="max-w-6xl mx-auto px-4 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-400">
-          <span>© {new Date().getFullYear()} {PRODUCT_NAME}. Quotes are estimates — always confirm final pricing with your customer.</span>
+          <span>© {new Date().getFullYear()} {COMPANY_NAME}. Quotes are estimates — always confirm final pricing with your customer.</span>
           <nav className="flex gap-6">
             <Link to="/pricing" className="hover:text-white">Pricing</Link>
             <Link to="/terms" className="hover:text-white">Terms</Link>

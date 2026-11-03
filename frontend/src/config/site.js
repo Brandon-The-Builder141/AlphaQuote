@@ -9,3 +9,10 @@ export const SUPPORT_EMAIL = 'support@alphaquote.app'; // PLACEHOLDER — not a 
 
 export const PRODUCT_NAME = 'AlphaQuote';
 export const PRODUCT_TAGLINE = 'Fast, professional quotes for contractors';
+
+// Pass Five (Iron Legion tailoring): this deployment is Iron Legion
+// Contracting LLC's own quoting tool, so the company — not the
+// software — is the customer-facing brand. Mirrors
+// backend/config/pricingDefaults.js.
+export const COMPANY_NAME = 'Iron Legion Contracting';
+export const COMPANY_LEGAL_NAME = 'Iron Legion Contracting LLC';

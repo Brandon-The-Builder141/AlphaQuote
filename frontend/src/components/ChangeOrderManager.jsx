@@ -50,7 +50,7 @@ const ChangeOrderManager = ({
     unit: 'ea',
     unitPrice: 0,
     laborHours: 0,
-    laborRate: 75,
+    laborRate: 60, // Iron Legion solo rate
     notes: '',
     category: 'General'
   });
@@ -89,7 +89,7 @@ const ChangeOrderManager = ({
       unit: 'ea',
       unitPrice: 0,
       laborHours: 0,
-      laborRate: 75,
+      laborRate: 60, // Iron Legion solo rate
       notes: '',
       category: 'General'
     });

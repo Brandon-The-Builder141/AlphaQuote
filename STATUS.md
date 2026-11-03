@@ -83,3 +83,74 @@ below and **overstate readiness — do not rely on them.**
   is shadowed by the `:id` route — cosmetic, tracked from Pass Two.
 - Dependency advisories are remediated to zero criticals in production deps;
   the frontend dev-toolchain backlog remains (build-time only).
+
+## Pass Five — Iron Legion tailoring (2026-11-03, branch `pass5-iron-legion`)
+
+AlphaQuote is now tailored to Iron Legion Contracting LLC, Brandon's
+own company, as config / defaults / seed / templates / branding. The
+multi-tenant lockdown is untouched — no auth, provisioning, tenant
+scoping, webhook, scraper, plan, or payment code changed. NOT merged
+to `pass4-postgres` and NOT pushed: Solen reviews and lands this
+branch; only then does Render deploy it.
+
+### What changed
+- **Single source of defaults:** `backend/config/pricingDefaults.js`
+  (mirrored in `frontend/src/utils/pricingConstants.js`): solo labor
+  $60/hr, crew labor $90/hr, material markup 15%, overhead margin
+  10%, minimum job $350, quotes valid 14 days, deposit 30–50% of
+  materials. Every hardcoded $75/$50 labor default in the app (room
+  calculator, schemas, change orders, accounting export, demo
+  profile, PDF) now falls back to these values.
+- **Service catalog:** Iron Legion's six trades only — Siding,
+  Fencing, Decking, Framing, Landscaping, Flooring — in the seed,
+  the template category picker, the profile industry picker, and the
+  landing-page trades row. No plumbing or electrical anywhere in
+  defaults, templates, or copy (the seeded regional packs no longer
+  carry an electrical-outlet material either).
+- **Starter templates (7):** one per trade from the Iron Legion
+  pricing sheet, framing twice (package $16/sq ft + labor-only
+  $6.50/sq ft): Siding $11,300 · Fencing $5,125 · Decking $10,100 ·
+  Framing package $8,000 · Framing labor-only $3,250 · Landscaping
+  $825 · Flooring $4,300 at default quantities. Seeded as the public
+  template library and creatable per-tenant through the existing API.
+- **Quote terms** print on the PDF and in the emailed quote: valid
+  14 days; deposit 30–50% of materials up front, balance on
+  completion; demolition damage/rot shown to the customer and agreed
+  before repair (time & materials); "Iron Legion does not perform
+  plumbing or electrical work." The old "valid for 30 days" lines
+  are gone.
+- **Branding:** `COMPANY_NAME` / `COMPANY_LEGAL_NAME` in
+  `frontend/src/config/site.js`; landing page rewritten for Iron
+  Legion (NW Ohio builder, six trades, first-person copy — pricing
+  tiers section untouched); setup defaults the company name to
+  "Iron Legion Contracting LLC"; PDF header/footer carry the company
+  name; emailed quotes use the account's company name with the Iron
+  Legion default. Support-email constant unchanged (placeholder).
+- **Minimum job:** the estimate form warns when a quote total is
+  above $0 but below the $350 Iron Legion minimum.
+
+### Deliberately left as-is (with reasons)
+- The app has **no margin field and no global settings store** — the
+  10% overhead margin and the labor/markup rates live in the config
+  modules above; building a settings table/API is a product change,
+  not tailoring.
+- The **setup form has no trades field** and the setup API stores
+  none, so "six trades preselected" has nowhere to land — the
+  catalog itself carries the six trades.
+- **Demo sample data** (demo vendors/projects/receipts, the frontend
+  demo profile, the frontend-only demo library) still shows generic
+  sample content — demo-mode flavor text, not defaults or catalog.
+  The demo profile's labor rate was still aligned to $60.
+- No dedicated "what counts toward the $350 minimum" enforcement
+  beyond the form warning — the app has no server-side total check
+  to hook it to.
+
+### Tests (38 total, all passing)
+`backend/tests/pass5-iron-legion.test.js` adds 7: config values
+pinned to the pricing sheet, catalog exactly six trades, quote terms
+content, template line items (rates × quantities) per trade, a
+no-plumbing/electrical guard over the template library, and an API
+round-trip creating + reading back all seven templates with
+computed totals. Frontend production build passes; local boot
+against the SQLite test schema verified (health, sync, setup with
+the Iron Legion name, template create, email-quote path).

@@ -448,7 +448,7 @@ class AccountingExportService {
   calculateLaborCost(rooms) {
     return rooms.reduce((total, room) => {
       const laborHours = room.laborHours || 0;
-      const laborRate = 50; // Default labor rate
+      const laborRate = 60; // Default labor rate (Iron Legion solo rate)
       return total + (laborHours * laborRate);
     }, 0);
   }

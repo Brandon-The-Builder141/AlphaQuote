@@ -4,6 +4,7 @@
  */
 
 const { PrismaClient } = require('@prisma/client');
+const pricingDefaults = require('../config/pricingDefaults');
 const prisma = new PrismaClient();
 
 const demoData = {
@@ -40,7 +41,6 @@ const demoData = {
         { materialKey: 'exterior_paint', materialName: 'Exterior Paint', category: 'Paint', unit: 'gallon', unitPrice: 48.00, unitLabel: 'per gallon', description: 'Weather-resistant exterior paint' },
         { materialKey: 'drywall', materialName: 'Drywall Sheets', category: 'Wall Materials', unit: 'sheet', unitPrice: 12.50, unitLabel: 'per sheet', description: 'Standard 1/2" drywall sheets' },
         { materialKey: 'insulation_batt', materialName: 'Fiberglass Insulation', category: 'Insulation', unit: 'sqft', unitPrice: 1.25, unitLabel: 'per sq ft', description: 'R-13 fiberglass batt insulation' },
-        { materialKey: 'electrical_outlet', materialName: 'Electrical Outlet', category: 'Electrical', unit: 'each', unitPrice: 8.75, unitLabel: 'per outlet', description: 'Standard 15A electrical outlet' }
       ]
     },
     {
@@ -57,7 +57,6 @@ const demoData = {
         { materialKey: 'exterior_paint', materialName: 'Exterior Paint', category: 'Paint', unit: 'gallon', unitPrice: 42.00, unitLabel: 'per gallon', description: 'Weather-resistant exterior paint' },
         { materialKey: 'drywall', materialName: 'Drywall Sheets', category: 'Wall Materials', unit: 'sheet', unitPrice: 10.50, unitLabel: 'per sheet', description: 'Standard 1/2" drywall sheets' },
         { materialKey: 'insulation_batt', materialName: 'Fiberglass Insulation', category: 'Insulation', unit: 'sqft', unitPrice: 1.15, unitLabel: 'per sq ft', description: 'R-13 fiberglass batt insulation' },
-        { materialKey: 'electrical_outlet', materialName: 'Electrical Outlet', category: 'Electrical', unit: 'each', unitPrice: 7.25, unitLabel: 'per outlet', description: 'Standard 15A electrical outlet' }
       ]
     },
     {
@@ -74,7 +73,6 @@ const demoData = {
         { materialKey: 'exterior_paint', materialName: 'Exterior Paint', category: 'Paint', unit: 'gallon', unitPrice: 55.00, unitLabel: 'per gallon', description: 'Weather-resistant exterior paint' },
         { materialKey: 'drywall', materialName: 'Drywall Sheets', category: 'Wall Materials', unit: 'sheet', unitPrice: 14.25, unitLabel: 'per sheet', description: 'Standard 1/2" drywall sheets' },
         { materialKey: 'insulation_batt', materialName: 'Fiberglass Insulation', category: 'Insulation', unit: 'sqft', unitPrice: 1.45, unitLabel: 'per sq ft', description: 'R-13 fiberglass batt insulation' },
-        { materialKey: 'electrical_outlet', materialName: 'Electrical Outlet', category: 'Electrical', unit: 'each', unitPrice: 9.50, unitLabel: 'per outlet', description: 'Standard 15A electrical outlet' }
       ]
     },
     {
@@ -91,7 +89,6 @@ const demoData = {
         { materialKey: 'exterior_paint', materialName: 'Exterior Paint', category: 'Paint', unit: 'gallon', unitPrice: 45.00, unitLabel: 'per gallon', description: 'Weather-resistant exterior paint' },
         { materialKey: 'drywall', materialName: 'Drywall Sheets', category: 'Wall Materials', unit: 'sheet', unitPrice: 11.50, unitLabel: 'per sheet', description: 'Standard 1/2" drywall sheets' },
         { materialKey: 'insulation_batt', materialName: 'Fiberglass Insulation', category: 'Insulation', unit: 'sqft', unitPrice: 1.30, unitLabel: 'per sq ft', description: 'R-13 fiberglass batt insulation' },
-        { materialKey: 'electrical_outlet', materialName: 'Electrical Outlet', category: 'Electrical', unit: 'each', unitPrice: 8.25, unitLabel: 'per outlet', description: 'Standard 15A electrical outlet' }
       ]
     }
   ],
@@ -204,84 +201,7 @@ const demoData = {
     }
   ],
 
-  taskTemplates: [
-    {
-      name: 'Kitchen Remodel - Basic',
-      description: 'Essential kitchen renovation tasks for a basic remodel',
-      category: 'Kitchen',
-      isPublic: true,
-      tasks: [
-        { name: 'Remove Old Cabinets', description: 'Remove existing kitchen cabinets and hardware', category: 'Demo', unit: 'sqft', quantity: 50, unitPrice: 2.50 },
-        { name: 'Install New Cabinets', description: 'Install new kitchen cabinets with hardware', category: 'Cabinets', unit: 'sqft', quantity: 50, unitPrice: 45.00 },
-        { name: 'Countertop Installation', description: 'Install quartz countertops', category: 'Countertops', unit: 'sqft', quantity: 25, unitPrice: 85.00 },
-        { name: 'Backsplash Tile', description: 'Install ceramic tile backsplash', category: 'Tile', unit: 'sqft', quantity: 15, unitPrice: 12.00 },
-        { name: 'Paint Kitchen Walls', description: 'Prime and paint kitchen walls', category: 'Paint', unit: 'sqft', quantity: 200, unitPrice: 1.25 }
-      ]
-    },
-    {
-      name: 'Bathroom Renovation - Standard',
-      description: 'Complete bathroom renovation including fixtures and flooring',
-      category: 'Bathroom',
-      isPublic: true,
-      tasks: [
-        { name: 'Bathroom Demo', description: 'Remove existing fixtures, tile, and vanity', category: 'Demo', unit: 'sqft', quantity: 35, unitPrice: 3.00 },
-        { name: 'Plumbing Rough-in', description: 'Update plumbing lines and connections', category: 'Plumbing', unit: 'each', quantity: 1, unitPrice: 450.00 },
-        { name: 'Tile Floor Installation', description: 'Install ceramic tile flooring', category: 'Flooring', unit: 'sqft', quantity: 35, unitPrice: 8.50 },
-        { name: 'Shower Tile', description: 'Install shower surround tile', category: 'Tile', unit: 'sqft', quantity: 45, unitPrice: 15.00 },
-        { name: 'Vanity Installation', description: 'Install new bathroom vanity', category: 'Fixtures', unit: 'each', quantity: 1, unitPrice: 650.00 },
-        { name: 'Toilet Installation', description: 'Install new toilet', category: 'Fixtures', unit: 'each', quantity: 1, unitPrice: 200.00 }
-      ]
-    },
-    {
-      name: 'Flooring Installation - LVP',
-      description: 'Luxury vinyl plank flooring installation with subfloor prep',
-      category: 'Flooring',
-      isPublic: true,
-      tasks: [
-        { name: 'Subfloor Preparation', description: 'Level and prepare subfloor', category: 'Prep', unit: 'sqft', quantity: 400, unitPrice: 1.50 },
-        { name: 'LVP Installation', description: 'Install luxury vinyl plank flooring', category: 'Flooring', unit: 'sqft', quantity: 400, unitPrice: 4.75 },
-        { name: 'Baseboard Installation', description: 'Install new baseboards and trim', category: 'Trim', unit: 'linear ft', quantity: 120, unitPrice: 3.50 },
-        { name: 'Transition Strips', description: 'Install transition strips between rooms', category: 'Trim', unit: 'each', quantity: 6, unitPrice: 25.00 }
-      ]
-    },
-    {
-      name: 'Interior Paint - Full House',
-      description: 'Complete interior painting including walls, ceilings, and trim',
-      category: 'Paint',
-      isPublic: true,
-      tasks: [
-        { name: 'Wall Preparation', description: 'Patch holes, sand, and prime walls', category: 'Prep', unit: 'sqft', quantity: 1200, unitPrice: 0.75 },
-        { name: 'Wall Painting', description: 'Paint all interior walls', category: 'Paint', unit: 'sqft', quantity: 1200, unitPrice: 1.25 },
-        { name: 'Ceiling Painting', description: 'Paint all ceilings', category: 'Paint', unit: 'sqft', quantity: 800, unitPrice: 0.95 },
-        { name: 'Trim Painting', description: 'Paint all trim, doors, and baseboards', category: 'Paint', unit: 'linear ft', quantity: 400, unitPrice: 2.50 }
-      ]
-    },
-    {
-      name: 'Electrical Upgrade - Panel',
-      description: 'Electrical panel upgrade and outlet additions',
-      category: 'Electrical',
-      isPublic: true,
-      tasks: [
-        { name: 'Panel Upgrade', description: 'Upgrade electrical panel to 200A', category: 'Electrical', unit: 'each', quantity: 1, unitPrice: 2500.00 },
-        { name: 'GFCI Outlets', description: 'Install GFCI outlets in kitchen and bathroom', category: 'Electrical', unit: 'each', quantity: 8, unitPrice: 125.00 },
-        { name: 'Additional Outlets', description: 'Add additional outlets throughout house', category: 'Electrical', unit: 'each', quantity: 12, unitPrice: 85.00 },
-        { name: 'Light Fixtures', description: 'Install new light fixtures', category: 'Electrical', unit: 'each', quantity: 6, unitPrice: 150.00 }
-      ]
-    },
-    {
-      name: 'Deck Construction - Composite',
-      description: 'Build composite deck with railings and stairs',
-      category: 'General',
-      isPublic: true,
-      tasks: [
-        { name: 'Foundation Posts', description: 'Install concrete footings and posts', category: 'Foundation', unit: 'each', quantity: 6, unitPrice: 150.00 },
-        { name: 'Deck Framing', description: 'Build deck frame and joists', category: 'Framing', unit: 'sqft', quantity: 200, unitPrice: 8.50 },
-        { name: 'Composite Decking', description: 'Install composite deck boards', category: 'Decking', unit: 'sqft', quantity: 200, unitPrice: 12.00 },
-        { name: 'Deck Railings', description: 'Install composite railings', category: 'Railings', unit: 'linear ft', quantity: 60, unitPrice: 35.00 },
-        { name: 'Stairs', description: 'Build deck stairs', category: 'Stairs', unit: 'step', quantity: 6, unitPrice: 85.00 }
-      ]
-    }
-  ]
+  taskTemplates: pricingDefaults.STARTER_TEMPLATES
 };
 
 async function main() {

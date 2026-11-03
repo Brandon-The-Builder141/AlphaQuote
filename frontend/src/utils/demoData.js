@@ -73,7 +73,7 @@ export const demoBusinessProfile = {
   phoneNumber: '(555) 987-6543',
   email: 'info@premierhomereno.com',
   defaultMarkup: 18,
-  hourlyLaborRate: 75,
+  hourlyLaborRate: 60, // Iron Legion solo rate
   serviceZipCode: '62701',
   preferredVendor: 'Home Depot',
   customVendor: '',

@@ -7,6 +7,7 @@ import ChangeOrderManager from './components/ChangeOrderManager';
 import RegionalPricePack from './components/RegionalPricePack';
 import TaskTemplates from './components/TaskTemplates';
 import { API_BASE_URL } from './config/env';
+import { MINIMUM_JOB_AMOUNT } from './utils/pricingConstants';
 import { generateQuotePDF } from './utils/pdfService';
 import { showSuccess, showError } from './utils/toastService';
 import {
@@ -775,6 +776,13 @@ const EstimateForm = () => {
                 <div className="text-sm text-gray-400">Subtotal: <span className="text-white font-semibold">${calculateSubtotal()}</span></div>
                 <div className="text-sm text-gray-400">Markup ({markup}%): <span className="text-white font-semibold">${calculateMarkupAmount()}</span></div>
                 <div className="text-lg text-neon-blue font-bold">Total: ${calculateTotal()}</div>
+                {/* Pass Five: Iron Legion minimum job is $350 — warn
+                    while quoting instead of silently going below it. */}
+                {parseFloat(calculateTotal()) > 0 && parseFloat(calculateTotal()) < MINIMUM_JOB_AMOUNT && (
+                  <div className="text-sm text-amber-400 font-medium mt-1">
+                    Below the ${MINIMUM_JOB_AMOUNT} minimum job — Iron Legion's minimum charge is ${MINIMUM_JOB_AMOUNT}.
+                  </div>
+                )}
               </div>
               <motion.button
                 onClick={handleGenerateEstimate}

@@ -56,16 +56,18 @@ const TaskTemplates = ({ onAddTasks, onClose }) => {
 
   const searchRef = useRef(null);
 
-  // Categories with icons
+  // Categories with icons — Pass Five (Iron Legion tailoring): the
+  // catalog is Iron Legion's six trades only. Iron Legion does not do
+  // plumbing or electrical work, so neither is a category here.
   const categories = [
     { value: 'all', label: 'All Templates', icon: Package },
-    { value: 'Kitchen', label: 'Kitchen', icon: Home },
-    { value: 'Bathroom', label: 'Bathroom', icon: Building },
-    { value: 'General', label: 'General', icon: Wrench },
+    { value: 'Siding', label: 'Siding', icon: Home },
+    { value: 'Fencing', label: 'Fencing', icon: Building },
+    { value: 'Decking', label: 'Decking', icon: FileText },
+    { value: 'Framing', label: 'Framing', icon: Wrench },
+    { value: 'Landscaping', label: 'Landscaping', icon: Edit3 },
     { value: 'Flooring', label: 'Flooring', icon: FileText },
-    { value: 'Paint', label: 'Paint', icon: Edit3 },
-    { value: 'Electrical', label: 'Electrical', icon: Wrench },
-    { value: 'Plumbing', label: 'Plumbing', icon: Wrench }
+    { value: 'General', label: 'General', icon: Wrench }
   ];
 
   useEffect(() => {
@@ -638,7 +640,7 @@ const CreateTemplateForm = ({ formData, setFormData, onSubmit, onCancel, isEditi
               value={formData.name}
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
               className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/50"
-              placeholder="e.g., Kitchen Remodel - Basic"
+              placeholder="e.g., Fencing — PT Wood Privacy (150 LF)"
             />
           </div>
 
@@ -652,12 +654,12 @@ const CreateTemplateForm = ({ formData, setFormData, onSubmit, onCancel, isEditi
               className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
             >
               <option value="General">General</option>
-              <option value="Kitchen">Kitchen</option>
-              <option value="Bathroom">Bathroom</option>
+              <option value="Siding">Siding</option>
+              <option value="Fencing">Fencing</option>
+              <option value="Decking">Decking</option>
+              <option value="Framing">Framing</option>
+              <option value="Landscaping">Landscaping</option>
               <option value="Flooring">Flooring</option>
-              <option value="Paint">Paint</option>
-              <option value="Electrical">Electrical</option>
-              <option value="Plumbing">Plumbing</option>
             </select>
           </div>
         </div>

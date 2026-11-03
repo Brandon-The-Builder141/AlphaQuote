@@ -37,7 +37,7 @@ export const roomSchema = z.object({
   sqft: z.number().min(1, 'Square footage must be at least 1'),
   materialCost: z.number().min(0, 'Material cost must be positive'),
   laborHours: z.number().min(0, 'Labor hours must be positive'),
-  laborRate: z.number().min(0, 'Labor rate must be positive').default(75),
+  laborRate: z.number().min(0, 'Labor rate must be positive').default(60), // Iron Legion solo rate
   demo: z.boolean().default(false),
   trim: z.boolean().default(false),
   paint: z.boolean().default(false),
@@ -120,7 +120,7 @@ export const profileSchema = z.object({
   website: z.string().url('Invalid URL').or(z.literal('')).optional(),
   license: z.string().max(50).optional(),
   defaultMarkup: z.number().min(0).max(100).default(15),
-  hourlyLaborRate: z.number().min(0).max(500).default(75),
+  hourlyLaborRate: z.number().min(0).max(500).default(60), // Iron Legion solo rate
   serviceZipCode: z.string().regex(/^\d{5}(-\d{4})?$/, 'Invalid ZIP code').optional(),
   primaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Invalid hex color').optional(),
   secondaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Invalid hex color').optional()
