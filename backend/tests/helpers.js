@@ -1,7 +1,13 @@
 /**
  * Shared test setup for the Pass Two lockdown tests.
  *
- * - Spins up a throwaway SQLite database and applies all migrations.
+ * - Spins up a throwaway SQLite database. The application schema
+ *   (backend/prisma/schema.prisma) targets PostgreSQL since the Pass Four
+ *   cutover, so tests run against the SQLite schema variant
+ *   (backend/prisma/schema.sqlite.prisma — identical models, sqlite
+ *   provider): the Prisma client is generated from that variant and the
+ *   tables are created with `prisma db push`. This keeps the suite on a
+ *   local file DB with zero external services; app code is unchanged.
  * - Replaces @clerk/clerk-sdk-node's verifyToken with a deterministic fake
  *   BEFORE the API is required: a token of the form `valid:<email>`
  *   verifies as that identity; anything else throws (invalid token).
@@ -55,20 +61,24 @@ async function startTestServer() {
   process.env.DATABASE_URL = `file:${dbPath}`;
   process.env.CLERK_SECRET_KEY = 'test-secret-key';
 
+  // Test DB setup against the SQLite schema variant (see header comment):
+  // generate the client from the variant, then push the schema into the
+  // throwaway file DB. The app schema targets PostgreSQL and is never used
+  // to build a test database.
+  const testSchema = path.join(REPO_ROOT, 'backend/prisma/schema.sqlite.prisma');
+  const prismaCliEnv = { ...process.env, ...localPrismaEngineEnv() };
+  const npxBin = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+
   execFileSync(
-    process.platform === 'win32' ? 'npx.cmd' : 'npx',
-    [
-      'prisma',
-      'migrate',
-      'deploy',
-      '--schema',
-      path.join(REPO_ROOT, 'backend/prisma/schema.prisma')
-    ],
-    {
-      cwd: REPO_ROOT,
-      env: { ...process.env, ...localPrismaEngineEnv() },
-      stdio: 'pipe'
-    }
+    npxBin,
+    ['prisma', 'generate', '--schema', testSchema],
+    { cwd: REPO_ROOT, env: prismaCliEnv, stdio: 'pipe' }
+  );
+
+  execFileSync(
+    npxBin,
+    ['prisma', 'db', 'push', '--schema', testSchema, '--skip-generate'],
+    { cwd: REPO_ROOT, env: prismaCliEnv, stdio: 'pipe' }
   );
 
   // Install the Clerk mock before anything requires the real SDK.

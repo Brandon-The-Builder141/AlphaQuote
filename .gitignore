@@ -474,6 +474,8 @@ __pycache__/
 *.log
 *.db
 *.sqlite*
+# ...but the test-only Prisma schema variant is source, not a database file
+!backend/prisma/schema.sqlite.prisma
 *.zip
 
 # React source directories are not generated dependencies

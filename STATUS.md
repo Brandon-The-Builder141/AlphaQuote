@@ -25,7 +25,7 @@ below and **overstate readiness — do not rely on them.**
     its SerpAPI key is env-only.
   - Frontend production build fixed and passing.
   - **24 automated tests, all passing** (`npm test` at repo root).
-- **Pass Three storefront (2026-11-02) — built, not deployed.**
+- **Pass Three storefront (2026-11-02) — built, then deployed to Railway.**
   - Public landing page at `/` for logged-out visitors; signed-in users land
     in the app as before.
   - Pricing: Free $0 / Solo $19/mo / Crew $39/mo, rendered from a single
@@ -33,15 +33,40 @@ below and **overstate readiness — do not rely on them.**
   - Terms of Service (`/terms`) and Privacy Policy (`/privacy`) pages.
   - Railway deploy prep: Dockerfiles, Railway configs, and a full env
     checklist + Postgres cutover plan in `docs/DEPLOY.md`.
+  - Deployed the same day from branch `pass2-lockdown` to Travis's Railway
+    workspace (SQLite on a volume — the documented stopgap), including the
+    live fixes for the receipts provisioning chain and exactly-once setup
+    (**31 automated tests, all passing**). That Railway deployment is the
+    current production system.
+- **Pass Four prep (2026-11-02, branch `pass4-postgres`) — migration
+  prepared, NOT executed.**
+  - Postgres cutover done on this branch: `schema.prisma` targets
+    PostgreSQL, the SQLite migration set is replaced by one baseline
+    migration generated offline from the full schema, models unchanged.
+  - Test suite still runs entirely on SQLite via the test-only schema
+    variant `backend/prisma/schema.sqlite.prisma` (`prisma db push` in
+    `backend/tests/helpers.js`); 31/31 tests pass on this branch and the
+    frontend build passes. Application code is behavior-identical.
+  - `render.yaml` Blueprint added: `alphaquote-api` (Docker, free plan)
+    + `alphaquote-web` (static site, SPA rewrite). **No Render Postgres
+    is defined** — Render's free Postgres expires after 30 days, so the
+    database will be an external **Neon** project.
+  - Migration-day checklist: `docs/DEPLOY-RENDER.md` (Neon setup → Blueprint
+    apply → secrets → Clerk webhook move → verification → Railway
+    retirement). Production stays on Railway/`pass2-lockdown` until that
+    checklist is run and verified.
 
 ## What is NOT true yet
 
-- **Nothing is deployed.** There is no production URL, no live users.
+- **The Render + Neon migration has not been executed.** Production is the
+  Railway deployment from `pass2-lockdown` (SQLite stopgap). The
+  `pass4-postgres` branch is prep only — do not deploy from it until the
+  `docs/DEPLOY-RENDER.md` checklist is run.
 - **Payments are not wired.** No Stripe (deliberately — do not add it) and no
   Whop yet. Paid-plan buttons show a "checkout coming online" state and route
   to sign-up. Wiring happens after the Whop account is set up.
-- **Production database is not set up.** Dev runs on SQLite; the Postgres
-  cutover steps are documented in `docs/DEPLOY.md` and have not been run.
+- **Production still runs SQLite** (Railway volume). The Postgres cutover
+  exists only on `pass4-postgres`; Neon is not provisioned yet.
 - **The support email on the legal pages is a placeholder**
   (`frontend/src/config/site.js`) — the domain/mailbox is not live yet.
 - **Clerk end-to-end with real production keys is unverified** — it will be
@@ -51,7 +76,8 @@ below and **overstate readiness — do not rely on them.**
 
 - Wire Whop checkout into the pricing config (`checkoutUrl` fields) and gate
   Solo/Crew features on subscription state end-to-end.
-- Run the Postgres cutover before onboarding real customers.
+- Run the Render + Neon migration (checklist in `docs/DEPLOY-RENDER.md`),
+  then retire the Railway services and merge `pass4-postgres`.
 - Point the support-email constant at a real mailbox.
 - A pre-existing route-order quirk means `GET /api/scheduled-jobs/statistics`
   is shadowed by the `:id` route — cosmetic, tracked from Pass Two.

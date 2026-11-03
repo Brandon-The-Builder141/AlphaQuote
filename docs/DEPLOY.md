@@ -2,6 +2,12 @@
 
 > Status as of 2026-11-02: **nothing is deployed yet.** This is the prepared
 > path. See `STATUS.md` at the repo root for the verified state of the code.
+>
+> **Free-hosting migration (Pass Four prep, branch `pass4-postgres`):** the
+> move to Render + Neon — Postgres cutover done on that branch, with a
+> `render.yaml` Blueprint and a step-by-step checklist — lives in
+> [`docs/DEPLOY-RENDER.md`](DEPLOY-RENDER.md). This document remains the
+> reference for the Railway deployment it migrates away from.
 
 ## Services
 
@@ -67,6 +73,12 @@ dead code — but the app works without it (prices fall back to estimates).
    `CLERK_WEBHOOK_SECRET` on the `api` service.
 
 ## Database
+
+> **On branch `pass4-postgres` the cutover below has already been done:**
+> `schema.prisma` targets PostgreSQL with a single baseline migration,
+> and the test suite runs on the test-only SQLite variant
+> (`backend/prisma/schema.sqlite.prisma`). The text below is the original
+> plan, kept for the Railway line (`pass2-lockdown`).
 
 Local dev uses **SQLite** (`provider = "sqlite"` in
 `backend/prisma/schema.prisma`, `DATABASE_URL` env holds the file URL from

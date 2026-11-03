@@ -1,0 +1,59 @@
+# AlphaQuote — Render Blueprint (Pass Four prep: free-hosting migration)
+#
+# Apply from the repo root in Render (New > Blueprint) on the migration
+# branch. See docs/DEPLOY-RENDER.md for the full migration-day checklist.
+#
+# IMPORTANT — no database is defined in this file, on purpose:
+# Render's free Postgres expires 30 days after creation. The production
+# database is an EXTERNAL Neon Postgres project; the api service receives
+# its connection string through the DATABASE_URL env var below.
+
+services:
+  # API — Express backend, built from the repo-root Dockerfile (which runs
+  # `prisma migrate deploy` against DATABASE_URL on boot, then starts the
+  # server on Render's injected $PORT).
+  - type: web
+    name: alphaquote-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Neon Postgres connection string (external — see note above).
+      - key: DATABASE_URL
+        sync: false
+      # Clerk production-instance secret key.
+      - key: CLERK_SECRET_KEY
+        sync: false
+      # Svix signing secret for the Clerk webhook endpoint
+      # (POST /api/webhooks/clerk). Without it the webhook fails closed
+      # and accounts are provisioned via in-app sync at sign-in instead.
+      - key: CLERK_WEBHOOK_SECRET
+        sync: false
+      # Comma-separated public origin(s) of alphaquote-web, no wildcards,
+      # e.g. https://alphaquote-web.onrender.com
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+
+  # Web — Create React App build served as a static site.
+  - type: web
+    name: alphaquote-web
+    runtime: static
+    plan: free
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: frontend/build
+    envVars:
+      # Build-time values — baked into the JS bundle; changing one
+      # requires a redeploy of this service.
+      - key: REACT_APP_CLERK_PUBLISHABLE_KEY
+        sync: false
+      # Public URL of alphaquote-api, e.g. https://alphaquote-api.onrender.com
+      - key: REACT_APP_API_URL
+        sync: false
+    routes:
+      # SPA fallback: every path serves the app shell; the router decides.
+      - type: rewrite
+        source: /*
+        destination: /index.html
