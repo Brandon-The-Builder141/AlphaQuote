@@ -38,6 +38,17 @@ function normalizeClerkUser(clerkUser) {
   };
 }
 
+/**
+ * Shape a User row for API responses: never expose the legacy password
+ * column, and surface setup completion as a plain boolean the frontend
+ * gate can read (setupCompletedAt stays the stored source of truth).
+ */
+function toPublicUser(user) {
+  if (!user) return user;
+  const { password, ...rest } = user;
+  return { ...rest, setupCompleted: Boolean(user.setupCompletedAt) };
+}
+
 class UserService {
   /**
    * Create or update user from Clerk data, linking by clerkId.
@@ -59,7 +70,7 @@ class UserService {
           where: { id: byClerkId.id },
           data: { email, firstName, lastName, lastLogin: new Date() }
         });
-        return { success: true, data: user };
+        return { success: true, data: toPublicUser(user) };
       }
 
       // 2. Legacy row matched by email: link the clerkId onto it.
@@ -69,7 +80,7 @@ class UserService {
           where: { id: byEmail.id },
           data: { clerkId, firstName, lastName, lastLogin: new Date() }
         });
-        return { success: true, data: user };
+        return { success: true, data: toPublicUser(user) };
       }
 
       // 3. Brand-new identity: create their contractor account and user.
@@ -95,7 +106,7 @@ class UserService {
         }
       });
 
-      return { success: true, data: user };
+      return { success: true, data: toPublicUser(user) };
     } catch (error) {
       console.error('Error creating/updating user:', error);
       return {
@@ -128,7 +139,7 @@ class UserService {
 
       return {
         success: true,
-        data: user
+        data: toPublicUser(user)
       };
     } catch (error) {
       console.error('Error fetching user:', error);
@@ -158,7 +169,7 @@ class UserService {
 
       return {
         success: true,
-        data: updatedUser
+        data: toPublicUser(updatedUser)
       };
     } catch (error) {
       console.error('Error updating user profile:', error);
@@ -166,6 +177,65 @@ class UserService {
         success: false,
         error: error.message
       };
+    }
+  }
+
+  /**
+   * Complete the one-time company setup (live fixes, 2026-11-02).
+   *
+   * Writes the company basics onto the user's EXISTING contractor
+   * account (provisioning already created one — setup must never create
+   * a second account or move the user) and stamps
+   * User.setupCompletedAt. The stamp is the single source of truth the
+   * frontend gate reads via GET /api/users/me, so setup runs exactly
+   * once per user across devices and re-logins. Re-running setup (e.g.
+   * editing company basics from the profile) updates the fields and
+   * keeps the stamp.
+   *
+   * @param {Object} clerkUser - verified-token identity (req.user)
+   * @param {Object} basics - { companyName, phone, address }
+   * @returns {Object} Updated public user (with contractorAccount)
+   */
+  async completeSetup(clerkUser, basics = {}) {
+    try {
+      // Provision on first contact if needed (same path as /api/users/sync),
+      // so setup can never dead-end on a missing user row.
+      let result = await this.getUserByClerkId(clerkUser.id);
+      if (!result.success) {
+        const provisioned = await this.createOrUpdateUser(clerkUser);
+        if (!provisioned.success) {
+          return provisioned;
+        }
+        result = await this.getUserByClerkId(clerkUser.id);
+        if (!result.success) {
+          return result;
+        }
+      }
+
+      const user = result.data;
+      const accountData = {};
+      const companyName = typeof basics.companyName === 'string' ? basics.companyName.trim() : '';
+      if (companyName) accountData.name = companyName;
+      if (typeof basics.phone === 'string') accountData.phone = basics.phone.trim() || null;
+      if (typeof basics.address === 'string') accountData.address = basics.address.trim() || null;
+
+      if (Object.keys(accountData).length > 0) {
+        await prisma.contractorAccount.update({
+          where: { id: user.contractorAccountId },
+          data: accountData
+        });
+      }
+
+      const updated = await prisma.user.update({
+        where: { id: user.id },
+        data: { setupCompletedAt: new Date() },
+        include: { contractorAccount: true }
+      });
+
+      return { success: true, data: toPublicUser(updated) };
+    } catch (error) {
+      console.error('Error completing setup:', error);
+      return { success: false, error: error.message };
     }
   }
 
