@@ -9,7 +9,6 @@ import {
   BarChart3,
   Receipt,
   TrendingUp,
-  Cog,
   UserPlus,
   Play
 } from 'lucide-react';
@@ -121,15 +120,6 @@ export default function StartEstimate() {
           </motion.div>
 
           <div className="flex items-center gap-4">
-            <motion.button
-              onClick={() => navigate('/setup')}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-800/50 hover:bg-slate-700/50 text-slate-300 hover:text-white rounded-xl border border-slate-700/50 hover:border-slate-600/50 transition-all duration-200 font-body"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <Cog className="w-4 h-4" />
-              Setup
-            </motion.button>
             <ServiceStatus compact={true} />
           </div>
         </div>

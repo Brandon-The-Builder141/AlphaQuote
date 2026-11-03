@@ -23,7 +23,6 @@ import ProjectBudget from './pages/ProjectBudget';
 import Analytics from './pages/Analytics';
 import FollowUps from './pages/FollowUps';
 import ReceiptParserTest from './components/ReceiptParserTest';
-import SetupWizard from './components/SetupWizard';
 import OfflineMode from './components/OfflineMode';
 import AccountingIntegration from './pages/AccountingIntegration';
 import JobScheduling from './pages/JobScheduling';
@@ -87,9 +86,10 @@ function App() {
     }
   }, []);
 
-  // First-run setup is gated by ProtectedRoute (server-side completion
-  // stamp), not by an app-level overlay — the old overlay plus the old
-  // /profile-setup redirect ran new users through setup twice.
+  // Pass Six: there is no first-run setup. Provisioning creates the
+  // account ready-to-use (Iron Legion name, setup stamped server-side),
+  // so sign-in lands straight on the dashboard. The old setup routes
+  // below just redirect there.
 
   return (
     <ClerkProviderWrapper>
@@ -128,7 +128,7 @@ function App() {
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
-          <Route path="/profile-setup" element={<Navigate to="/setup" replace />} />
+          <Route path="/profile-setup" element={<Navigate to="/dashboard" replace />} />
 
           {/* Protected Routes with Layout */}
           <Route path="/dashboard" element={
@@ -258,11 +258,8 @@ function App() {
             </ProtectedRoute>
           } />
           <Route path="/receipt-parser-test" element={<ReceiptParserTest />} />
-          <Route path="/setup" element={
-            <ProtectedRoute>
-              <SetupWizard />
-            </ProtectedRoute>
-          } />
+          {/* Pass Six: the setup wizard is gone — stale links land on the dashboard. */}
+          <Route path="/setup" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </Router>
     </ClerkProviderWrapper>

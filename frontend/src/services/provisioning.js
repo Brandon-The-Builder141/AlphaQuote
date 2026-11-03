@@ -11,8 +11,12 @@
  * This module is the single place that:
  *   1. calls POST /api/users/sync exactly once per signed-in user, then
  *   2. reads GET /api/users/me and caches { user, contractorAccount,
- *      setupCompleted } for the session,
- *   3. posts the one-time company setup to POST /api/users/setup.
+ *      setupCompleted } for the session.
+ *
+ * Pass Six: there is no step 3 — no setup call exists. Provisioning
+ * creates the account ready-to-use on the server, so setupCompleted
+ * always comes back true for a provisioned user and nothing in the
+ * frontend acts on it beyond caching it.
  *
  * The Clerk token is attached by the global fetch interceptor
  * (services/apiAuthInterceptor.js, installed in index.js).
@@ -80,24 +84,6 @@ export function ensureProvisioned(clerkUserId) {
 /** The cached provisioning state, or null if not loaded yet. */
 export function getProvisioningState() {
   return cache.state;
-}
-
-/**
- * Submit the one-time company setup. The server stamps completion on
- * the User row, so this is the last time the setup gate will fire —
- * on any device, after any re-login.
- */
-export async function completeSetup(basics) {
-  const response = await fetch(`${API_BASE_URL}/api/users/setup`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(basics || {})
-  });
-  const body = await response.json().catch(() => null);
-  if (!response.ok || !body?.success) {
-    throw new Error(body?.error || `Setup failed (${response.status})`);
-  }
-  return applyMeResponse(body.data);
 }
 
 /** Forget the cached state (e.g. on sign-out / account switch). */

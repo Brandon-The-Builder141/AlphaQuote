@@ -154,3 +154,51 @@ round-trip creating + reading back all seven templates with
 computed totals. Frontend production build passes; local boot
 against the SQLite test schema verified (health, sync, setup with
 the Iron Legion name, template create, email-quote path).
+
+## Pass Six — No setup (2026-11-03, branch `pass6-no-setup`)
+
+Brandon's direct order: "get rid of the setup… you pretty much already
+know everything… This would be my own dashboard. It should be strictly
+for me. I shouldn't have to run through a setup process." This
+deployment is his tool, so sign-in now lands on a ready dashboard —
+no wizard, no gate, no setup prompts anywhere.
+
+### What changed
+- **Provisioning pre-completes the account** (`userService.createOrUpdateUser`):
+  a brand-new account is created with
+  `name = pricingDefaults.COMPANY_LEGAL_NAME` ("Iron Legion Contracting
+  LLC") instead of the auto-generated "<First> <Last> Company"
+  placeholder, and the User row is stamped `setupCompletedAt` at
+  creation. Existing accounts keep their data untouched. Auth, Clerk
+  verification, and tenant scoping unchanged; the stamp is written
+  only in this server-side path — no client input can set it.
+- **Setup endpoint deleted:** `POST /api/users/setup` and
+  `userService.completeSetup` are removed. Evidence for the decision:
+  the only caller in the codebase was the setup wizard itself
+  (`SetupWizard.jsx` → `provisioning.js completeSetup()`). Profile's
+  company editing never used the endpoint — it reads/writes its
+  localStorage profile store, exactly as before, and stays untouched.
+  (The `POST /api/users/contractor-account` endpoint was NOT used as
+  an edit path: it creates a brand-new account and moves the user
+  onto it, which would duplicate accounts.)
+- **Frontend wizard + gates deleted:** `components/SetupWizard.jsx`
+  removed; `ProtectedRoute` no longer redirects to `/setup` (it only
+  provisions and renders); `provisioning.js` lost its `completeSetup`
+  export; the `/setup` and `/profile-setup` routes now redirect to
+  `/dashboard`; Profile's "Run Setup Wizard" button and legacy "Setup
+  Information" panel removed; the dashboard header's "Setup" button
+  removed. Sign-in gate behavior (landing for signed-out, app for
+  signed-in) unchanged.
+
+### Tests (40 total, all passing)
+`backend/tests/live-fixes.test.js` rewritten to the new contract:
+`POST /api/users/setup` answers 404 with and without a token; a newly
+provisioned user is setup-complete from the first sync with the Iron
+Legion account name; a regression test proves re-sync never resets,
+renames, or duplicates the company; a per-user test proves each new
+user gets their own ready account (tenant isolation intact). All
+lockdown tests (401s, tenant isolation, bypass regression) pass
+unchanged. Frontend production build passes, and the built bundle
+contains no setup-wizard strings. Boot smoke verified: fresh-user
+sync → `GET /api/users/me` shows `setupCompletedAt` set and the
+"Iron Legion Contracting LLC" account.

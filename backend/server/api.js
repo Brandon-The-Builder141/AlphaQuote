@@ -179,26 +179,11 @@ app.put('/api/users/profile', authenticateUser, async (req, res) => {
   }
 });
 
-app.post('/api/users/setup', authenticateUser, async (req, res) => {
-  try {
-    const { companyName, phone, address } = req.body || {};
-
-    const result = await userService.completeSetup(req.user, {
-      companyName,
-      phone,
-      address
-    });
-
-    if (result.success) {
-      res.json({ success: true, data: result.data });
-    } else {
-      res.status(400).json({ success: false, error: result.error });
-    }
-  } catch (error) {
-    console.error('Error completing setup:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+// Pass Six (no setup): POST /api/users/setup is gone. There is no setup
+// step to complete — provisioning (userService.createOrUpdateUser)
+// creates the account under the Iron Legion name and stamps setup
+// completion server-side at creation. Nothing a client sends can set
+// that stamp.
 
 app.post('/api/users/contractor-account', authenticateUser, async (req, res) => {
   try {

@@ -1,14 +1,14 @@
 /**
  * Protected Route Component
- * Redirects unauthenticated users to sign-in page, and signed-in users
- * through the one-time provisioning + setup gate:
+ * Redirects unauthenticated users to the sign-in page. Signed-in users
+ * are provisioned once per session (POST /api/users/sync via
+ * services/provisioning) so the account exists before any data page
+ * asks for its rows — without it the API answers 403 and pages like
+ * Receipts fail.
  *
- *   1. POST /api/users/sync runs once per session (services/provisioning)
- *      so the account exists before any data page asks for its rows —
- *      without it the API answers 403 and pages like Receipts fail.
- *   2. If the server says setup is not completed, the user is sent to
- *      /setup. Completion is stamped on the User row server-side, so
- *      this fires exactly once per user — not once per browser.
+ * Pass Six: there is no setup gate anymore. Provisioning creates the
+ * account ready-to-use, so a signed-in user lands straight on the
+ * dashboard — no wizard, no redirect, no nag.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -49,9 +49,9 @@ const ProtectedRoute = ({ children }) => {
     let cancelled = false;
     setGate({ status: 'loading' });
     ensureProvisioned(clerkUserId)
-      .then((state) => {
+      .then(() => {
         if (!cancelled) {
-          setGate({ status: 'ready', setupCompleted: state.setupCompleted });
+          setGate({ status: 'ready' });
         }
       })
       .catch((error) => {
@@ -89,7 +89,7 @@ const ProtectedRoute = ({ children }) => {
 
   // Signed in but the Clerk user object has not arrived yet
   if (!clerkUserId || gate.status === 'loading') {
-    return <LoadingScreen message="Setting up your account..." />;
+    return <LoadingScreen message="Loading your account..." />;
   }
 
   if (gate.status === 'error') {
@@ -109,12 +109,6 @@ const ProtectedRoute = ({ children }) => {
         </div>
       </div>
     );
-  }
-
-  // One-time setup gate: server-side completion is the only source of
-  // truth. The setup page itself is exempt, or it could never render.
-  if (!gate.setupCompleted && location.pathname !== '/setup') {
-    return <Navigate to="/setup" state={{ from: location }} replace />;
   }
 
   return children;

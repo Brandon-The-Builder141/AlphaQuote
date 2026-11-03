@@ -11,7 +11,6 @@ import {
   Edit,
   Save,
   X,
-  Calculator,
   Settings,
   User,
   Briefcase,
@@ -299,17 +298,6 @@ export default function Profile() {
             >
               <ArrowLeft className="w-5 h-5" />
               <span className="font-body">Back to Home</span>
-            </motion.button>
-
-            <div className="w-px h-6 bg-slate-700"></div>
-
-            <motion.button
-              onClick={() => navigate('/setup')}
-              className="flex items-center space-x-3 text-primary hover:text-primary/80 transition-colors duration-300"
-              whileHover={{ x: 4 }}
-            >
-              <span className="font-body">Run Setup Wizard</span>
-              <Calculator className="w-5 h-5" />
             </motion.button>
 
             <div className="w-px h-6 bg-slate-700"></div>
@@ -617,44 +605,6 @@ export default function Profile() {
             </div>
           </motion.div>
 
-          {/* Additional Information Section */}
-          {wizardData && (
-            <motion.div
-              className="mt-8 pt-8 border-t border-slate-700/50"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-            >
-              <h4 className="text-lg font-heading text-white mb-4 flex items-center gap-2">
-                <Settings className="w-5 h-5 text-primary" />
-                Setup Information
-              </h4>
-
-              <div className="grid md:grid-cols-2 gap-6">
-                <div>
-                  <span className="text-slate-400 font-body text-sm">Setup Completed</span>
-                  <p className="text-white font-body">
-                    {wizardData.completedAt ? new Date(wizardData.completedAt).toLocaleDateString() : 'Unknown'}
-                  </p>
-                </div>
-
-                <div>
-                  <span className="text-slate-400 font-body text-sm">Enabled Modules</span>
-                  <div className="flex flex-wrap gap-2 mt-1">
-                    {wizardData.modules?.selectedModules && Object.entries(wizardData.modules.selectedModules)
-                      .filter(([_, enabled]) => enabled)
-                      .map(([moduleId, _]) => (
-                        <span key={moduleId} className="px-2 py-1 bg-primary/20 text-primary rounded-lg text-xs font-body">
-                          {moduleId === 'estimation' ? 'Estimation' :
-                            moduleId === 'vendorManagement' ? 'Vendor Management' :
-                              moduleId === 'reporting' ? 'Reporting' : moduleId}
-                        </span>
-                      ))}
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
         </motion.div>
       </div>
     </div>

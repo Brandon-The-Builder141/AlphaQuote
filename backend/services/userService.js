@@ -16,6 +16,14 @@
  *      for the user plus their User row (User.contractorAccountId is
  *      required, so a brand-new identity needs both).
  *
+ * Pass Six (no setup): there is no setup flow anymore. This deployment
+ * is Iron Legion's own tool, so a brand-new account is created
+ * ready-to-use: the contractor account is named
+ * pricingDefaults.COMPANY_LEGAL_NAME ("Iron Legion Contracting LLC")
+ * and the User row is stamped setupCompletedAt at creation. The stamp
+ * is written only here, server-side — no endpoint accepts it from a
+ * client (POST /api/users/setup was removed in Pass Six).
+ *
  * The local `password` column is legacy (password sign-in was removed in
  * Pass Two); Clerk-provisioned users get a random, unusable value — Clerk
  * is the only credential authority.
@@ -23,6 +31,7 @@
 
 const crypto = require('crypto');
 const { PrismaClient } = require('@prisma/client');
+const pricingDefaults = require('../config/pricingDefaults');
 
 const prisma = new PrismaClient();
 
@@ -40,8 +49,10 @@ function normalizeClerkUser(clerkUser) {
 
 /**
  * Shape a User row for API responses: never expose the legacy password
- * column, and surface setup completion as a plain boolean the frontend
- * gate can read (setupCompletedAt stays the stored source of truth).
+ * column, and surface setup completion as a plain boolean
+ * (setupCompletedAt stays the stored source of truth). Since Pass Six
+ * every provisioned user is setup-complete from creation; the boolean
+ * is informational only — nothing gates on it anymore.
  */
 function toPublicUser(user) {
   if (!user) return user;
@@ -84,9 +95,13 @@ class UserService {
       }
 
       // 3. Brand-new identity: create their contractor account and user.
+      // Pass Six: this deployment is Iron Legion's own tool — the
+      // account is created under the company's legal name and the user
+      // is stamped setup-complete right here. No placeholder name, no
+      // wizard, no gate: sign-in lands on a ready dashboard.
       const contractorAccount = await prisma.contractorAccount.create({
         data: {
-          name: `${firstName || 'New'} ${lastName || 'Contractor'}`.trim() + ' Company',
+          name: pricingDefaults.COMPANY_LEGAL_NAME,
           email
         }
       });
@@ -102,6 +117,7 @@ class UserService {
           password: crypto.randomBytes(32).toString('hex'),
           role: 'admin',
           contractorAccountId: contractorAccount.id,
+          setupCompletedAt: new Date(),
           lastLogin: new Date()
         }
       });
@@ -177,65 +193,6 @@ class UserService {
         success: false,
         error: error.message
       };
-    }
-  }
-
-  /**
-   * Complete the one-time company setup (live fixes, 2026-11-02).
-   *
-   * Writes the company basics onto the user's EXISTING contractor
-   * account (provisioning already created one — setup must never create
-   * a second account or move the user) and stamps
-   * User.setupCompletedAt. The stamp is the single source of truth the
-   * frontend gate reads via GET /api/users/me, so setup runs exactly
-   * once per user across devices and re-logins. Re-running setup (e.g.
-   * editing company basics from the profile) updates the fields and
-   * keeps the stamp.
-   *
-   * @param {Object} clerkUser - verified-token identity (req.user)
-   * @param {Object} basics - { companyName, phone, address }
-   * @returns {Object} Updated public user (with contractorAccount)
-   */
-  async completeSetup(clerkUser, basics = {}) {
-    try {
-      // Provision on first contact if needed (same path as /api/users/sync),
-      // so setup can never dead-end on a missing user row.
-      let result = await this.getUserByClerkId(clerkUser.id);
-      if (!result.success) {
-        const provisioned = await this.createOrUpdateUser(clerkUser);
-        if (!provisioned.success) {
-          return provisioned;
-        }
-        result = await this.getUserByClerkId(clerkUser.id);
-        if (!result.success) {
-          return result;
-        }
-      }
-
-      const user = result.data;
-      const accountData = {};
-      const companyName = typeof basics.companyName === 'string' ? basics.companyName.trim() : '';
-      if (companyName) accountData.name = companyName;
-      if (typeof basics.phone === 'string') accountData.phone = basics.phone.trim() || null;
-      if (typeof basics.address === 'string') accountData.address = basics.address.trim() || null;
-
-      if (Object.keys(accountData).length > 0) {
-        await prisma.contractorAccount.update({
-          where: { id: user.contractorAccountId },
-          data: accountData
-        });
-      }
-
-      const updated = await prisma.user.update({
-        where: { id: user.id },
-        data: { setupCompletedAt: new Date() },
-        include: { contractorAccount: true }
-      });
-
-      return { success: true, data: toPublicUser(updated) };
-    } catch (error) {
-      console.error('Error completing setup:', error);
-      return { success: false, error: error.message };
     }
   }
 
