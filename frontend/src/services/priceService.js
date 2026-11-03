@@ -79,36 +79,43 @@ export const getMaterialPrice = async (materialName, profile = null) => {
 };
 
 /**
- * Get scraped price from SerpAPI (existing system)
+ * Get a live price via the API's scraper proxy (Pass Seven).
+ *
+ * The browser never calls the scraper service directly — it used to,
+ * without any credentials, against a service that was never deployed,
+ * so this step always failed silently. The API calls the scraper
+ * server-to-server and answers honestly: source 'live' with a real
+ * averaged price, or price:null when unconfigured/unavailable, in
+ * which case this returns null and the chain falls through to the
+ * explicit "no pricing data" result.
+ *
  * @param {string} materialName - Material to search for
  * @param {Object} profile - User profile
- * @returns {Object} Scraped price result
+ * @returns {Object|null} Scraped price result, or null when unavailable
  */
 const getScrapedPrice = async (materialName, profile = null) => {
   try {
-    const { SCRAPER_URL } = await import('../config/env');
-    const zipCode = profile?.zipCode || '90210';
-    const response = await fetch(`${SCRAPER_URL}/scrape-price?search=${encodeURIComponent(materialName)}&zip=${zipCode}&sites=allStores`);
+    const { API_BASE_URL } = await import('../config/env');
+    const zipCode = profile?.zipCode || '';
+    const response = await fetch(
+      `${API_BASE_URL}/api/prices/lookup?material=${encodeURIComponent(materialName)}&zip=${encodeURIComponent(zipCode)}`
+    );
+    if (!response.ok) {
+      return null;
+    }
     const priceData = await response.json();
 
-    if (priceData.results && priceData.results.length > 0) {
-      const prices = priceData.results
-        .map(item => parseFloat(item.price.replace(/[$,]/g, '')))
-        .filter(p => !isNaN(p) && p > 0);
-
-      if (prices.length > 0) {
-        const averagePrice = prices.reduce((a, b) => a + b, 0) / prices.length;
-        return {
-          price: averagePrice,
-          unit: 'per sq ft',
-          source: 'scraped',
-          materialName,
-          vendor: 'Multiple Retailers',
-          confidence: 'medium',
-          timestamp: new Date().toISOString(),
-          rawData: priceData
-        };
-      }
+    if (priceData.source === 'live' && priceData.price > 0) {
+      return {
+        price: priceData.price,
+        unit: 'per sq ft',
+        source: 'scraped',
+        materialName,
+        vendor: 'Multiple Retailers',
+        confidence: 'medium',
+        timestamp: new Date().toISOString(),
+        rawData: priceData
+      };
     }
   } catch (error) {
     console.warn('Scraped price lookup failed:', error);

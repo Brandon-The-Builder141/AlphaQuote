@@ -228,7 +228,7 @@ app.get('/api/users/subscription', authenticateUser, async (req, res) => {
   }
 });
 
-// Vendor Routes (now with optional authentication)
+// Vendor Routes (tenant auth required, like every data route)
 app.get('/api/vendors', requireTenantAuth, async (req, res) => {
   try {
     const vendors = await prisma.localVendor.findMany({
@@ -243,6 +243,28 @@ app.get('/api/vendors', requireTenantAuth, async (req, res) => {
     res.json({ success: true, vendors });
   } catch (error) {
     console.error('Error fetching vendors:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/vendors/:id', requireTenantAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const vendor = await prisma.localVendor.findFirst({
+      where: { AND: [{ id }, scopeWhere(req)] },
+      include: {
+        prices: true,
+        receipts: true,
+      },
+    });
+
+    if (!vendor) {
+      return res.status(404).json({ success: false, error: 'Vendor not found' });
+    }
+
+    res.json({ success: true, vendor });
+  } catch (error) {
+    console.error('Error fetching vendor:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -323,6 +345,22 @@ app.delete('/api/vendors/:id', requireTenantAuth, async (req, res) => {
     });
     if (!ownedVendor) {
       return res.status(404).json({ success: false, error: 'Vendor not found' });
+    }
+
+    // Receipts cannot exist without a vendor (Receipt.vendorId is a
+    // required relation), so a vendor with receipts on file cannot be
+    // deleted. Answer honestly with a 409 and the count instead of
+    // letting the database foreign key fail as an opaque 500 (Pass
+    // Seven: this was a live "vendors page wasn't working" cause —
+    // receipts auto-create vendors, so nearly every real vendor hit it).
+    const receiptCount = await prisma.receipt.count({
+      where: { vendorId: id }
+    });
+    if (receiptCount > 0) {
+      return res.status(409).json({
+        success: false,
+        error: `This vendor has ${receiptCount} receipt${receiptCount === 1 ? '' : 's'} on file. Delete those receipts first, then delete the vendor.`
+      });
     }
 
     await prisma.localVendor.delete({
@@ -422,37 +460,150 @@ app.get('/api/projects/:id', requireTenantAuth, async (req, res) => {
 });
 
 // Receipt Routes
+//
+// Pass Seven (receipts maintainable) helpers. Two dialect notes drove
+// their shape:
+//  - Vendor matching is case-insensitive and done in JS over the
+//    tenant's (small) vendor list: exact `=` matching is case-sensitive
+//    in Postgres, so "Home Depot" vs "home depot" used to create
+//    duplicate vendors depending on who typed the receipt.
+//  - Line totals are computed on the server from quantity x unitPrice,
+//    so stored receipts always reconcile no matter what the client sent.
+
+function normalizeReceiptItems(rawItems) {
+  // Returns { items } or { error }. Each item is validated and its line
+  // total computed server-side.
+  const items = [];
+  for (const item of rawItems) {
+    const name = typeof item?.name === 'string' ? item.name.trim() : '';
+    const quantity = parseFloat(item?.quantity);
+    const unitPrice = parseFloat(item?.unitPrice);
+    if (!name || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(unitPrice) || unitPrice < 0) {
+      return { error: 'Each item needs a name, a quantity above 0, and a valid unit price' };
+    }
+    items.push({
+      name,
+      quantity,
+      unitPrice,
+      total: roundTo2Decimals(quantity * unitPrice),
+      unit: typeof item.unit === 'string' && item.unit.trim() ? item.unit.trim() : 'each',
+      synthetic: false
+    });
+  }
+  return { items };
+}
+
+async function findTenantVendorByName(req, name) {
+  const target = name.trim().toLowerCase();
+  const vendors = await prisma.localVendor.findMany({ where: scopeWhere(req) });
+  return vendors.find((v) => v.name.trim().toLowerCase() === target) || null;
+}
+
+async function learnVendorPrices(vendorRecord, receiptId, lineItems) {
+  // Receipt -> vendor price learning: the vendor's latest unit price for
+  // each material on the receipt. Synthetic "Receipt total" lines are
+  // not materials and never teach a price.
+  for (const item of lineItems) {
+    if (item.synthetic) continue;
+    const materialKey = toMaterialKey(item.name);
+    if (!materialKey) continue;
+
+    const existingPrice = await prisma.localVendorPrice.findFirst({
+      where: { vendorId: vendorRecord.id, materialKey }
+    });
+
+    if (existingPrice) {
+      await prisma.localVendorPrice.update({
+        where: { id: existingPrice.id },
+        data: {
+          unitPrice: item.unitPrice,
+          materialName: item.name,
+          lastUpdated: new Date(),
+          receiptId
+        }
+      });
+    } else {
+      await prisma.localVendorPrice.create({
+        data: {
+          vendorId: vendorRecord.id,
+          materialKey,
+          materialName: item.name,
+          unitPrice: item.unitPrice,
+          unitLabel: item.unit,
+          category: 'General',
+          confidence: 1.0,
+          receiptId
+        }
+      });
+    }
+  }
+}
+
 app.post('/api/receipts', requireTenantAuth, async (req, res) => {
   try {
     const { vendor, purchaseDate, items, total, fileName, rawText, projectId } = req.body;
 
     // Validate required fields
     if (!vendor || vendor.trim() === '') {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Vendor name is required' 
+      return res.status(400).json({
+        success: false,
+        error: 'Vendor name is required'
       });
     }
 
     if (!purchaseDate) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Purchase date is required' 
+      return res.status(400).json({
+        success: false,
+        error: 'Purchase date is required'
       });
     }
 
-    if (!items || items.length === 0) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'At least one item is required' 
+    const parsedDate = new Date(purchaseDate);
+    if (isNaN(parsedDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        error: 'Purchase date is invalid'
       });
     }
 
-    // Create or find vendor
-    let vendorRecord = await prisma.localVendor.findFirst({
-      where: { AND: [{ name: vendor.trim() }, scopeWhere(req)] }
-    });
-    
+    // Validate + normalize line items (server computes the line totals).
+    const normalized = normalizeReceiptItems(Array.isArray(items) ? items : []);
+    if (normalized.error) {
+      return res.status(400).json({ success: false, error: normalized.error });
+    }
+    const lineItems = normalized.items;
+
+    const clientTotal = parseFloat(total);
+    if (lineItems.length === 0) {
+      // Manual receipt: vendor/date/total typed by hand with no line
+      // items (the ReceiptNew manual path). Keep exactly one line item
+      // for the total so the receipt reconciles; it is flagged synthetic
+      // and excluded from price learning. Without a usable total there
+      // is nothing to save.
+      if (!Number.isFinite(clientTotal) || clientTotal <= 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'At least one item is required'
+        });
+      }
+      lineItems.push({
+        name: 'Receipt total',
+        quantity: 1,
+        unitPrice: clientTotal,
+        total: roundTo2Decimals(clientTotal),
+        unit: 'each',
+        synthetic: true
+      });
+    }
+
+    const itemsTotal = roundTo2Decimals(lineItems.reduce((sum, item) => sum + item.total, 0));
+    const receiptTotal = Number.isFinite(clientTotal) && clientTotal > 0
+      ? roundTo2Decimals(clientTotal)
+      : itemsTotal;
+
+    // Create or find vendor (case-insensitive within this tenant)
+    let vendorRecord = await findTenantVendorByName(req, vendor);
+
     if (!vendorRecord) {
       vendorRecord = await prisma.localVendor.create({
         data: {
@@ -478,12 +629,12 @@ app.post('/api/receipts', requireTenantAuth, async (req, res) => {
       }
     }
 
-    // Create receipt record
+    // Create receipt record (total reconciled above)
     const receipt = await prisma.receipt.create({
       data: {
         vendorId: vendorRecord.id,
-        receiptDate: new Date(purchaseDate),
-        total: total || 0,
+        receiptDate: parsedDate,
+        total: receiptTotal,
         fileName: fileName || 'unknown',
         category: 'General',
         verified: false,
@@ -493,63 +644,25 @@ app.post('/api/receipts', requireTenantAuth, async (req, res) => {
       }
     });
 
-    // Create receipt items
+    // Create receipt items with the server-computed line totals
     const receiptItems = await Promise.all(
-      items.map(item =>
+      lineItems.map(item =>
         prisma.receiptItem.create({
           data: {
             receiptId: receipt.id,
             description: item.name,
             quantity: item.quantity,
             unitPrice: item.unitPrice,
-            totalPrice: item.total || (item.quantity * item.unitPrice),
-            unit: 'each',
+            totalPrice: item.total,
+            unit: item.unit,
             category: 'General'
           }
         })
       )
     );
 
-    // Create or update vendor prices
-    await Promise.all(
-      items.map(async (item) => {
-        const materialKey = item.name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
-        
-        // Check if price already exists for this material and vendor
-        const existingPrice = await prisma.localVendorPrice.findFirst({
-          where: {
-            vendorId: vendorRecord.id,
-            materialKey: materialKey
-          }
-        });
-
-        if (existingPrice) {
-          // Update existing price
-          await prisma.localVendorPrice.update({
-            where: { id: existingPrice.id },
-            data: {
-              unitPrice: item.unitPrice,
-              lastUpdated: new Date(),
-              receiptId: receipt.id
-            }
-          });
-        } else {
-          // Create new price
-          await prisma.localVendorPrice.create({
-            data: {
-              vendorId: vendorRecord.id,
-              materialKey: materialKey,
-              materialName: item.name,
-              unitPrice: item.unitPrice,
-              unitLabel: 'each', // Default unit
-              category: 'General',
-              confidence: 1.0,
-              receiptId: receipt.id
-            }
-          });
-        }
-      })
-    );
+    // Receipt -> vendor price learning
+    await learnVendorPrices(vendorRecord, receipt.id, lineItems);
 
     console.log('✅ Receipt saved:', receipt.id);
     res.status(201).json({
@@ -593,6 +706,7 @@ app.get('/api/receipts', requireTenantAuth, async (req, res) => {
         fileName: receipt.fileName,
         uploadDate: receipt.uploadDate,
         projectId: receipt.projectId,
+        status: receipt.verified ? 'verified' : 'manual',
         project: receipt.projectRef ? {
           id: receipt.projectRef.id,
           name: receipt.projectRef.name
@@ -635,6 +749,7 @@ app.get('/api/receipts/:id', requireTenantAuth, async (req, res) => {
         fileName: receipt.fileName,
         uploadDate: receipt.uploadDate,
         projectId: receipt.projectId,
+        status: receipt.verified ? 'verified' : 'manual',
         project: receipt.projectRef ? {
           id: receipt.projectRef.id,
           name: receipt.projectRef.name
@@ -656,7 +771,7 @@ app.get('/api/receipts/:id', requireTenantAuth, async (req, res) => {
 app.put('/api/receipts/:id', requireTenantAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { vendorName, purchaseDate, totalAmount, notes, status, projectId } = req.body;
+    const { vendorName, purchaseDate, totalAmount, notes, status, projectId, items } = req.body;
 
     const ownedReceipt = await prisma.receipt.findFirst({
       where: { AND: [{ id }, scopeWhere(req)] }
@@ -683,17 +798,85 @@ app.put('/api/receipts/:id', requireTenantAuth, async (req, res) => {
       });
     }
 
-    if (!totalAmount || isNaN(parseFloat(totalAmount)) || parseFloat(totalAmount) <= 0) {
+    const parsedDate = new Date(purchaseDate);
+    if (isNaN(parsedDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        error: 'Purchase date is invalid'
+      });
+    }
+
+    // Optional line-item replacement (Pass Seven): when `items` is sent,
+    // it fully replaces the receipt's items with server-computed totals,
+    // and the total is derived from them unless explicitly provided.
+    let lineItems = null;
+    if (items !== undefined) {
+      if (!Array.isArray(items)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Items must be an array'
+        });
+      }
+      const normalized = normalizeReceiptItems(items);
+      if (normalized.error) {
+        return res.status(400).json({ success: false, error: normalized.error });
+      }
+      lineItems = normalized.items;
+    }
+
+    let receiptTotal;
+    if (totalAmount !== undefined && totalAmount !== null && totalAmount !== '') {
+      const parsedTotal = parseFloat(totalAmount);
+      if (isNaN(parsedTotal) || parsedTotal <= 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Valid total amount is required'
+        });
+      }
+      receiptTotal = roundTo2Decimals(parsedTotal);
+    } else if (lineItems) {
+      if (lineItems.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Valid total amount is required'
+        });
+      }
+      receiptTotal = roundTo2Decimals(lineItems.reduce((sum, item) => sum + item.total, 0));
+    } else {
       return res.status(400).json({
         success: false,
         error: 'Valid total amount is required'
       });
     }
 
-    // Find or create vendor
-    let vendorRecord = await prisma.localVendor.findFirst({
-      where: { AND: [{ name: vendorName.trim() }, scopeWhere(req)] }
-    });
+    if (lineItems && lineItems.length === 0) {
+      // Same manual-receipt rule as POST: keep one synthetic line for
+      // the total so the receipt reconciles.
+      lineItems.push({
+        name: 'Receipt total',
+        quantity: 1,
+        unitPrice: receiptTotal,
+        total: receiptTotal,
+        unit: 'each',
+        synthetic: true
+      });
+    }
+
+    // If a project is referenced, it must belong to the caller's tenant
+    if (projectId) {
+      const ownedProject = await prisma.project.findFirst({
+        where: { AND: [{ id: projectId }, scopeWhere(req)] }
+      });
+      if (!ownedProject) {
+        return res.status(400).json({
+          success: false,
+          error: 'Project not found'
+        });
+      }
+    }
+
+    // Find or create vendor (case-insensitive within this tenant)
+    let vendorRecord = await findTenantVendorByName(req, vendorName);
 
     if (!vendorRecord) {
       vendorRecord = await prisma.localVendor.create({
@@ -707,21 +890,44 @@ app.put('/api/receipts/:id', requireTenantAuth, async (req, res) => {
       });
     }
 
-    // Update receipt
+    // Update receipt (verified only changes when status is sent)
     const updatedReceipt = await prisma.receipt.update({
       where: { id },
       data: {
         vendorId: vendorRecord.id,
-        receiptDate: new Date(purchaseDate),
-        total: parseFloat(totalAmount),
+        receiptDate: parsedDate,
+        total: receiptTotal,
         projectId: projectId || null,
-        verified: status === 'verified'
+        ...(status !== undefined ? { verified: status === 'verified' } : {})
       },
       include: {
         vendor: true,
         projectRef: true
       }
     });
+
+    // Replace line items when provided, then re-teach vendor prices
+    let itemsCount = undefined;
+    if (lineItems) {
+      await prisma.receiptItem.deleteMany({ where: { receiptId: id } });
+      await Promise.all(
+        lineItems.map(item =>
+          prisma.receiptItem.create({
+            data: {
+              receiptId: id,
+              description: item.name,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              totalPrice: item.total,
+              unit: item.unit,
+              category: 'General'
+            }
+          })
+        )
+      );
+      itemsCount = lineItems.length;
+      await learnVendorPrices(vendorRecord, id, lineItems);
+    }
 
     console.log('✅ Receipt updated:', updatedReceipt.id);
     res.json({
@@ -736,7 +942,8 @@ app.put('/api/receipts/:id', requireTenantAuth, async (req, res) => {
           id: updatedReceipt.projectRef.id,
           name: updatedReceipt.projectRef.name
         } : null,
-        status: updatedReceipt.verified ? 'verified' : 'manual'
+        status: updatedReceipt.verified ? 'verified' : 'manual',
+        ...(itemsCount !== undefined ? { itemsCount } : {})
       }
     });
   } catch (error) {
@@ -774,6 +981,220 @@ app.delete('/api/receipts/:id', requireTenantAuth, async (req, res) => {
   } catch (error) {
     console.error('Error deleting receipt:', error);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Price lookup routes (Pass Seven)
+//
+// The browser never talks to the scraper service directly. These routes
+// are the only path to live pricing:
+//   - /api/prices/by-material — prices this tenant's receipts have taught
+//     (LocalVendorPrice rows), the receipt-price step of the estimate
+//     price chain.
+//   - /api/prices/lookup — server-to-server proxy to the scraper service
+//     (SCRAPER_SERVICE_URL + SCRAPER_SHARED_SECRET). Degradation is
+//     honest: unconfigured or unreachable returns price:null with a
+//     source explaining why — never an invented number.
+//   - /api/prices/status — what the frontend status widget reads.
+// ---------------------------------------------------------------------------
+
+const toMaterialKey = (name) =>
+  String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+
+const getScraperConfig = () => ({
+  url: (process.env.SCRAPER_SERVICE_URL || '').replace(/\/+$/, ''),
+  secret: process.env.SCRAPER_SHARED_SECRET || ''
+});
+
+async function fetchWithTimeout(url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * One scraper call with a single retry on transport failure or a 502
+ * (upstream SerpAPI error). A 503 from the scraper means "not
+ * configured" — retrying cannot help, so it is returned as-is.
+ * Throws only when both attempts fail at the transport level.
+ */
+async function callScraper(search, zip) {
+  const { url, secret } = getScraperConfig();
+  const timeoutMs = parseInt(process.env.SCRAPER_TIMEOUT_MS || '15000', 10);
+  const target = `${url}/scrape-price?search=${encodeURIComponent(search)}&zip=${encodeURIComponent(zip || '')}&sites=allStores`;
+
+  let lastError = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await fetchWithTimeout(
+        target,
+        { headers: { 'x-scraper-secret': secret } },
+        timeoutMs
+      );
+      if (response.status === 502 && attempt === 0) {
+        continue; // one retry on upstream failure
+      }
+      const body = await response.json().catch(() => null);
+      return { status: response.status, body };
+    } catch (error) {
+      lastError = error; // transport failure / timeout — retry once
+    }
+  }
+  throw lastError || new Error('Scraper request failed');
+}
+
+app.get('/api/prices/by-material', requireTenantAuth, async (req, res) => {
+  try {
+    const material = typeof req.query.material === 'string' ? req.query.material.trim() : '';
+    if (!material) {
+      return res.status(400).json({ success: false, error: 'Query parameter "material" is required' });
+    }
+
+    // Tenant-scoped: only prices learned from THIS tenant's vendors.
+    const tenantVendors = await prisma.localVendor.findMany({
+      where: scopeWhere(req),
+      select: { id: true }
+    });
+    const vendorIds = tenantVendors.map((v) => v.id);
+    if (vendorIds.length === 0) {
+      return res.json({ success: true, prices: [] });
+    }
+
+    const prices = await prisma.localVendorPrice.findMany({
+      where: {
+        vendorId: { in: vendorIds },
+        materialKey: toMaterialKey(material)
+      },
+      include: { vendor: { select: { name: true } } },
+      orderBy: { lastUpdated: 'desc' }
+    });
+
+    res.json({
+      success: true,
+      prices: prices.map((p) => ({
+        id: p.id,
+        materialName: p.materialName,
+        materialKey: p.materialKey,
+        unitPrice: p.unitPrice,
+        unitLabel: p.unitLabel,
+        category: p.category,
+        lastUpdated: p.lastUpdated,
+        vendor: { name: p.vendor.name }
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching material prices:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/prices/lookup', requireTenantAuth, async (req, res) => {
+  const material = typeof req.query.material === 'string' ? req.query.material.trim() : '';
+  if (!material) {
+    return res.status(400).json({ success: false, error: 'Query parameter "material" is required' });
+  }
+  if (material.length > 120) {
+    return res.status(400).json({ success: false, error: 'Query parameter "material" is too long (max 120 characters)' });
+  }
+  const zip = typeof req.query.zip === 'string' ? req.query.zip.trim() : '';
+
+  const { url, secret } = getScraperConfig();
+  if (!url || !secret) {
+    // Honest degradation: live lookup is not wired up on this deployment.
+    return res.json({
+      success: true,
+      source: 'unconfigured',
+      query: material,
+      price: null,
+      results: [],
+      message: 'Live price lookup is not configured on this server'
+    });
+  }
+
+  try {
+    const { status, body } = await callScraper(material, zip);
+
+    if (status === 503 || body?.source === 'unconfigured') {
+      return res.json({
+        success: true,
+        source: 'unconfigured',
+        query: material,
+        price: null,
+        results: [],
+        message: 'Live price lookup is not configured on the scraper service'
+      });
+    }
+
+    if (status !== 200 || !body || body.success === false) {
+      return res.json({
+        success: true,
+        source: 'unavailable',
+        query: material,
+        price: null,
+        results: [],
+        message: 'Live price lookup is temporarily unavailable'
+      });
+    }
+
+    const results = (body.results || [])
+      .filter((r) => typeof r.priceValue === 'number' && r.priceValue > 0)
+      .slice(0, 10)
+      .map((r) => ({
+        title: r.title,
+        price: r.price,
+        priceValue: r.priceValue,
+        source: r.source
+      }));
+
+    const price = results.length > 0
+      ? results.reduce((sum, r) => sum + r.priceValue, 0) / results.length
+      : null;
+
+    return res.json({
+      success: true,
+      source: price !== null ? 'live' : 'unavailable',
+      query: material,
+      price,
+      results,
+      message: price !== null ? undefined : 'No live prices found for this material'
+    });
+  } catch (error) {
+    console.error('Scraper lookup failed:', error.message);
+    return res.json({
+      success: true,
+      source: 'unavailable',
+      query: material,
+      price: null,
+      results: [],
+      message: 'Live price lookup is temporarily unavailable'
+    });
+  }
+});
+
+app.get('/api/prices/status', requireTenantAuth, async (req, res) => {
+  const { url, secret } = getScraperConfig();
+  if (!url || !secret) {
+    return res.json({ success: true, configured: false, reachable: false, serpApiConfigured: false });
+  }
+  try {
+    const response = await fetchWithTimeout(`${url}/health`, {}, 3000);
+    if (!response.ok) {
+      return res.json({ success: true, configured: true, reachable: false, serpApiConfigured: false });
+    }
+    const body = await response.json().catch(() => ({}));
+    return res.json({
+      success: true,
+      configured: true,
+      reachable: true,
+      serpApiConfigured: Boolean(body.serpApiConfigured)
+    });
+  } catch (error) {
+    return res.json({ success: true, configured: true, reachable: false, serpApiConfigured: false });
   }
 });
 
@@ -1035,16 +1456,8 @@ app.get('/api/regional-materials', authenticateUser, async (req, res) => {
     if (category && category !== 'All') {
       whereClause.category = category;
     }
-    
-    if (search) {
-      whereClause.OR = [
-        { materialName: { contains: search, mode: 'insensitive' } },
-        { category: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } }
-      ];
-    }
 
-    const materials = await prisma.regionalMaterial.findMany({
+    let materials = await prisma.regionalMaterial.findMany({
       where: whereClause,
       include: {
         pricePack: {
@@ -1056,6 +1469,20 @@ app.get('/api/regional-materials', authenticateUser, async (req, res) => {
         { materialName: 'asc' }
       ]
     });
+
+    // Case-insensitive search is filtered in JS (Pass Seven): Prisma's
+    // `mode: 'insensitive'` is Postgres-only — on SQLite it throws a
+    // validation error and the route 500s, so the two dialects could
+    // never share one query. The catalog is small; identical semantics
+    // on both dialects beats a dialect-specific query.
+    if (search) {
+      const needle = search.toLowerCase();
+      materials = materials.filter((m) =>
+        (m.materialName || '').toLowerCase().includes(needle) ||
+        (m.category || '').toLowerCase().includes(needle) ||
+        (m.description || '').toLowerCase().includes(needle)
+      );
+    }
 
     res.json(materials);
   } catch (error) {
@@ -1080,25 +1507,17 @@ app.get('/api/regional-materials/suggestions', authenticateUser, async (req, res
       return res.status(404).json({ success: false, error: 'Region not found' });
     }
 
-    let whereClause = { 
+    let whereClause = {
       pricePackId: pricePack.id,
-      isActive: true 
+      isActive: true
     };
-
-    // If materialName is provided, find similar materials
-    if (materialName) {
-      whereClause.OR = [
-        { materialName: { contains: materialName, mode: 'insensitive' } },
-        { materialKey: { contains: materialName.toLowerCase().replace(/\s+/g, '_'), mode: 'insensitive' } }
-      ];
-    }
 
     // If category is provided, filter by category
     if (category && category !== 'All') {
       whereClause.category = category;
     }
 
-    const suggestions = await prisma.regionalMaterial.findMany({
+    let suggestions = await prisma.regionalMaterial.findMany({
       where: whereClause,
       include: {
         pricePack: {
@@ -1108,11 +1527,22 @@ app.get('/api/regional-materials/suggestions', authenticateUser, async (req, res
       orderBy: [
         { category: 'asc' },
         { materialName: 'asc' }
-      ],
-      take: 10 // Limit to 10 suggestions
+      ]
     });
 
-    res.json(suggestions);
+    // Material-name matching is case-insensitive and done in JS for the
+    // same reason as /api/regional-materials above (Prisma's insensitive
+    // mode is Postgres-only and 500s on SQLite).
+    if (materialName) {
+      const nameNeedle = materialName.toLowerCase();
+      const keyNeedle = materialName.toLowerCase().replace(/\s+/g, '_');
+      suggestions = suggestions.filter((m) =>
+        (m.materialName || '').toLowerCase().includes(nameNeedle) ||
+        (m.materialKey || '').toLowerCase().includes(keyNeedle)
+      );
+    }
+
+    res.json(suggestions.slice(0, 10)); // Limit to 10 suggestions
   } catch (error) {
     console.error('Error fetching material suggestions:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -1704,9 +2134,39 @@ app.get('/api/analytics', requireTenantAuth, async (req, res) => {
       percentage: totalCostsForBreakdown > 0 ? (amount / totalCostsForBreakdown * 100).toFixed(1) : 0
     })).sort((a, b) => b.amount - a.amount);
 
-    // Calculate growth percentages (mock data for demo)
-    const revenueGrowth = Math.random() * 20 - 5; // -5% to +15%
-    const projectGrowth = Math.random() * 30 - 10; // -10% to +20%
+    // Growth percentages (Pass Seven: computed, never fabricated).
+    // Compare this period against the immediately preceding period of
+    // the same length, tenant-scoped, from real receipts and projects.
+    // With no previous-period baseline the growth is 100 when the
+    // current period has activity and 0 when both are empty — a
+    // deterministic convention, not a random number dressed as data
+    // (the old code returned Math.random() growth on every load).
+    const periodMs = now.getTime() - startDate.getTime();
+    const prevStart = new Date(startDate.getTime() - periodMs);
+    const [prevReceipts, prevProjectCount] = await Promise.all([
+      prisma.receipt.findMany({
+        where: {
+          AND: [
+            { receiptDate: { gte: prevStart, lt: startDate } },
+            scopeWhere(req)
+          ]
+        },
+        select: { total: true }
+      }),
+      prisma.project.count({
+        where: {
+          AND: [
+            { createdAt: { gte: prevStart, lt: startDate } },
+            scopeWhere(req)
+          ]
+        }
+      })
+    ]);
+    const prevRevenue = prevReceipts.reduce((sum, r) => sum + parseFloat(r.total), 0);
+    const growthPct = (current, previous) =>
+      previous > 0 ? ((current - previous) / previous) * 100 : (current > 0 ? 100 : 0);
+    const revenueGrowth = growthPct(totalRevenue, prevRevenue);
+    const projectGrowth = growthPct(projects.length, prevProjectCount);
 
     const analytics = {
       summaryStats: {
@@ -2156,6 +2616,49 @@ app.get('/api/scheduled-jobs', requireTenantAuth, async (req, res) => {
   }
 });
 
+// NOTE (Pass Seven): /statistics must be registered BEFORE /:id —
+// Express matches in registration order, so as originally written
+// this route was unreachable (every call was captured by :id and
+// answered 404).
+// Get job statistics
+app.get('/api/scheduled-jobs/statistics', requireTenantAuth, async (req, res) => {
+  try {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfWeek = new Date(now.getTime() - (now.getDay() * 24 * 60 * 60 * 1000));
+
+    const scope = scopeWhere(req);
+    const [totalJobs, inProgress, completed, overdue] = await Promise.all([
+      prisma.scheduledJob.count({
+        where: { AND: [{ startDate: { gte: startOfMonth } }, scope] }
+      }),
+      prisma.scheduledJob.count({
+        where: { AND: [{ status: 'in_progress' }, scope] }
+      }),
+      prisma.scheduledJob.count({
+        where: { AND: [{ status: 'completed', endDate: { gte: startOfWeek } }, scope] }
+      }),
+      prisma.scheduledJob.count({
+        where: { AND: [{ status: { not: 'completed' }, endDate: { lt: now } }, scope] }
+      })
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        totalJobs,
+        inProgress,
+        completed,
+        overdue
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching job statistics:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+
 // Get scheduled job by ID
 app.get('/api/scheduled-jobs/:id', requireTenantAuth, async (req, res) => {
   try {
@@ -2217,6 +2720,32 @@ app.post('/api/scheduled-jobs', requireTenantAuth, async (req, res) => {
       });
     }
 
+    if (isNaN(new Date(startDate).getTime()) || isNaN(new Date(endDate).getTime())) {
+      return res.status(400).json({
+        success: false,
+        error: 'Start date and end date must be valid dates'
+      });
+    }
+
+    // Referenced project/estimate must belong to the caller's tenant
+    // (same rule the receipts and follow-ups routes already enforce)
+    if (projectId) {
+      const ownedProject = await prisma.project.findFirst({
+        where: { AND: [{ id: projectId }, scopeWhere(req)] }
+      });
+      if (!ownedProject) {
+        return res.status(400).json({ success: false, error: 'Project not found' });
+      }
+    }
+    if (estimateId) {
+      const ownedEstimate = await prisma.estimate.findFirst({
+        where: { AND: [{ id: estimateId }, scopeWhere(req)] }
+      });
+      if (!ownedEstimate) {
+        return res.status(400).json({ success: false, error: 'Estimate not found' });
+      }
+    }
+
     const job = await prisma.scheduledJob.create({
       data: {
         title: title.trim(),
@@ -2269,12 +2798,36 @@ app.put('/api/scheduled-jobs/:id', requireTenantAuth, async (req, res) => {
     delete updateData.contractorAccountId;
     delete updateData.createdById;
 
+    // Referenced project/estimate must belong to the caller's tenant
+    if (updateData.projectId) {
+      const ownedProject = await prisma.project.findFirst({
+        where: { AND: [{ id: updateData.projectId }, scopeWhere(req)] }
+      });
+      if (!ownedProject) {
+        return res.status(400).json({ success: false, error: 'Project not found' });
+      }
+    }
+    if (updateData.estimateId) {
+      const ownedEstimate = await prisma.estimate.findFirst({
+        where: { AND: [{ id: updateData.estimateId }, scopeWhere(req)] }
+      });
+      if (!ownedEstimate) {
+        return res.status(400).json({ success: false, error: 'Estimate not found' });
+      }
+    }
+
     // Convert date strings to Date objects if present
     if (updateData.startDate) {
       updateData.startDate = new Date(updateData.startDate);
+      if (isNaN(updateData.startDate.getTime())) {
+        return res.status(400).json({ success: false, error: 'Start date must be a valid date' });
+      }
     }
     if (updateData.endDate) {
       updateData.endDate = new Date(updateData.endDate);
+      if (isNaN(updateData.endDate.getTime())) {
+        return res.status(400).json({ success: false, error: 'End date must be a valid date' });
+      }
     }
     if (updateData.recurrenceEnd) {
       updateData.recurrenceEnd = new Date(updateData.recurrenceEnd);
@@ -2383,44 +2936,6 @@ app.delete('/api/scheduled-jobs/:id/sync', requireTenantAuth, async (req, res) =
   }
 });
 
-// Get job statistics
-app.get('/api/scheduled-jobs/statistics', requireTenantAuth, async (req, res) => {
-  try {
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfWeek = new Date(now.getTime() - (now.getDay() * 24 * 60 * 60 * 1000));
-
-    const scope = scopeWhere(req);
-    const [totalJobs, inProgress, completed, overdue] = await Promise.all([
-      prisma.scheduledJob.count({
-        where: { AND: [{ startDate: { gte: startOfMonth } }, scope] }
-      }),
-      prisma.scheduledJob.count({
-        where: { AND: [{ status: 'in_progress' }, scope] }
-      }),
-      prisma.scheduledJob.count({
-        where: { AND: [{ status: 'completed', endDate: { gte: startOfWeek } }, scope] }
-      }),
-      prisma.scheduledJob.count({
-        where: { AND: [{ status: { not: 'completed' }, endDate: { lt: now } }, scope] }
-      })
-    ]);
-
-    res.json({
-      success: true,
-      data: {
-        totalJobs,
-        inProgress,
-        completed,
-        overdue
-      }
-    });
-  } catch (error) {
-    console.error('Error fetching job statistics:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
 // Get calendar sync settings
 app.get('/api/calendar-sync-settings', requireTenantAuth, async (req, res) => {
   try {
@@ -2447,10 +2962,22 @@ app.get('/api/calendar-sync-settings', requireTenantAuth, async (req, res) => {
 // Update calendar sync settings
 app.put('/api/calendar-sync-settings', requireTenantAuth, async (req, res) => {
   try {
-    const settingsData = { ...req.body };
-    // Ownership fields are never client-writable (Pass Two)
-    delete settingsData.id;
-    delete settingsData.contractorAccountId;
+    // Whitelist the model's writable fields (Pass Seven): the body used
+    // to be spread straight into Prisma, so any stale or extra field a
+    // client sent failed the whole update with a validation 500.
+    // Ownership fields are never client-writable (Pass Two).
+    const WRITABLE = [
+      'googleCalendarEnabled', 'googleCalendarId', 'googleCalendarToken',
+      'googleCalendarRefreshToken', 'icalEnabled', 'icalUrl',
+      'icalUsername', 'icalPassword', 'autoSync', 'syncFrequency',
+      'syncDirection'
+    ];
+    const settingsData = {};
+    for (const field of WRITABLE) {
+      if (req.body[field] !== undefined) {
+        settingsData[field] = req.body[field];
+      }
+    }
 
     let settings = await prisma.calendarSyncSettings.findFirst({
       where: { contractorAccountId: req.tenantId }

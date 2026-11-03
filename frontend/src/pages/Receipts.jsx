@@ -122,9 +122,11 @@ export default function Receipts() {
   const handleEditReceipt = (receipt) => {
     setEditingReceipt(receipt);
 
-    // Populate form with receipt data
+    // Populate form with receipt data. The form field is a date input,
+    // which needs YYYY-MM-DD — the API returns a full ISO timestamp,
+    // which used to leave the field blank in the edit form.
     setValue('vendorName', receipt.vendor);
-    setValue('purchaseDate', receipt.purchaseDate);
+    setValue('purchaseDate', receipt.purchaseDate ? receipt.purchaseDate.slice(0, 10) : '');
     setValue('totalAmount', receipt.total.toString());
     setValue('notes', receipt.notes || '');
     setValue('status', receipt.status || 'parsed');

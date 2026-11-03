@@ -1,36 +1,49 @@
-// Enhanced Multi-Site Price Scraper for AlphaQuote using SerpAPI
-// Professional price scraping with Google Shopping results
+// Price Scraper Service for AlphaQuote (SerpAPI / Google Shopping)
 //
-// Pass Two finish (lockdown): this service previously served fully open
-// endpoints — anyone who could reach it could burn the paid SerpAPI quota
-// behind it. The data routes now require the same verified Clerk token as
-// the main API (backend/middleware/auth.js). The SerpAPI key comes only
-// from the SERPAPI_KEY environment variable; no key material exists in
-// code. The only public route left is GET /health, a liveness probe that
-// returns no data and makes no SerpAPI call.
+// Pass Seven (production hardening). The contract is now explicit:
+//
+//   * ONLY the main AlphaQuote API calls this service, server-to-server.
+//     Browsers never talk to it directly (Pass Two had locked it behind a
+//     browser-held Clerk token the frontend never actually sent, so every
+//     live lookup failed; and the service was never deployed at all).
+//   * Data routes require a shared secret in the `x-scraper-secret`
+//     header, compared in constant time. The secret comes only from the
+//     SCRAPER_SHARED_SECRET environment variable. When it is not set the
+//     data routes fail closed (503) — an unconfigured service serves
+//     nothing, ever.
+//   * The SerpAPI key comes only from the SERPAPI_KEY environment
+//     variable. When it is missing the service answers honestly
+//     (503, source: 'unconfigured', zero results). The old behavior —
+//     fabricating random "store prices" — is gone: this service never
+//     invents a price.
+//   * Upstream SerpAPI calls have a hard timeout; an upstream failure is
+//     a 502, never a silently-empty or fake result set.
+//   * GET /health stays public: a data-free liveness probe that makes no
+//     SerpAPI call and reports only whether the secrets are configured.
 
 const express = require("express");
 const cors = require("cors");
-const { authenticateUser } = require("../middleware/auth");
+const crypto = require("crypto");
 
 // Use built-in fetch for Node.js 18+ or node-fetch for older versions
 const fetch = globalThis.fetch || require('node-fetch');
 
-// SerpAPI configuration
-// Get your free API key from: https://serpapi.com
-const SERPAPI_KEY = process.env.SERPAPI_KEY || '';
 const SERPAPI_BASE_URL = 'https://serpapi.com/search.json';
+const SERPAPI_TIMEOUT_MS = parseInt(process.env.SERPAPI_TIMEOUT_MS || '10000', 10);
 
-// Check if SerpAPI is configured
-const isSerpApiEnabled = () => {
-  return !!SERPAPI_KEY && SERPAPI_KEY.length > 0;
-};
+// Secrets are read lazily (per call) so configuration is never captured
+// stale at require time and tests can set env before exercising routes.
+const getSerpApiKey = () => process.env.SERPAPI_KEY || '';
+const getSharedSecret = () => process.env.SCRAPER_SHARED_SECRET || '';
+const isSerpApiEnabled = () => getSerpApiKey().length > 0;
+const isSecretConfigured = () => getSharedSecret().length > 0;
 
 const app = express();
 // SCRAPER_PORT wins when set (local dev); fall back to the host-injected PORT.
 const PORT = process.env.SCRAPER_PORT || process.env.PORT || 5050;
 
-// CORS: same explicit allowlist as the main API (Pass Two).
+// CORS: server-to-server callers send no Origin, so this only matters for
+// local development. Same explicit allowlist style as the main API.
 const corsAllowlist = (
   process.env.CORS_ALLOWED_ORIGINS ||
   [process.env.FRONTEND_URL || 'http://localhost:3000', 'http://localhost:3000', 'http://127.0.0.1:3000'].join(',')
@@ -48,67 +61,142 @@ app.use(cors({
   }
 }));
 
-// Log startup configuration
-if (process.env.DEBUG === 'true') {
-  console.log('Scraper Service Configuration:');
-  console.log(`  Port: ${PORT}`);
-  console.log(`  SerpAPI: ${isSerpApiEnabled() ? 'Enabled' : 'Disabled (using fallback prices)'}`);
+/**
+ * Shared-secret gate for every data route. Fails closed:
+ *  - secret not configured on this service -> 503 (service not lit up)
+ *  - header missing or wrong              -> 401
+ */
+function requireScraperSecret(req, res, next) {
+  const configured = getSharedSecret();
+  if (!configured) {
+    return res.status(503).json({
+      success: false,
+      source: 'unconfigured',
+      error: 'Scraper service is not configured (SCRAPER_SHARED_SECRET is not set)'
+    });
+  }
+  const presented = req.get('x-scraper-secret') || '';
+  const presentedBuf = Buffer.from(presented);
+  const configuredBuf = Buffer.from(configured);
+  const matches =
+    presentedBuf.length === configuredBuf.length &&
+    crypto.timingSafeEqual(presentedBuf, configuredBuf);
+  if (!matches) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' });
+  }
+  return next();
 }
 
-// SerpAPI Shopping Search Functions
-const serpApiSearch = async (query, location = "United States") => {
-  try {
-    const params = new URLSearchParams({
-      engine: 'google_shopping',
-      q: query,
-      location: location,
-      api_key: SERPAPI_KEY,
-      num: 20, // Get up to 20 results
-      sort: 'price_low_to_high'
+/**
+ * Honest-unconfigured gate: without a SerpAPI key there is no live data,
+ * so data routes say so instead of fabricating prices.
+ */
+function requireSerpApi(req, res, next) {
+  if (!isSerpApiEnabled()) {
+    return res.status(503).json({
+      success: false,
+      source: 'unconfigured',
+      results: [],
+      totalResults: 0,
+      averagePrice: null,
+      error: 'SERPAPI_KEY is not configured on the scraper service; live pricing is unavailable'
     });
-
-    const url = `${SERPAPI_BASE_URL}?${params}`;
-    console.log(`🔍 SerpAPI Search: ${query} in ${location}`);
-    
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      throw new Error(`SerpAPI returned ${response.status}: ${response.statusText}`);
-    }
-    
-    const data = await response.json();
-    
-    if (data.error) {
-      throw new Error(`SerpAPI Error: ${data.error}`);
-    }
-    
-    return data.shopping_results || [];
-    
-  } catch (error) {
-    console.error('SerpAPI search failed:', error.message);
-    return [];
   }
+  return next();
+}
+
+// --- Input validation -------------------------------------------------
+
+function parseSearchParams(req) {
+  const rawSearch = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+  if (!rawSearch) {
+    return { error: 'Query parameter "search" is required' };
+  }
+  if (rawSearch.length > 120) {
+    return { error: 'Query parameter "search" is too long (max 120 characters)' };
+  }
+  const rawZip = typeof req.query.zip === 'string' ? req.query.zip.trim() : '';
+  if (rawZip && !/^[A-Za-z0-9][A-Za-z0-9 -]{1,9}$/.test(rawZip)) {
+    return { error: 'Query parameter "zip" is not a valid postal code' };
+  }
+  return { search: rawSearch, zip: rawZip, location: rawZip || 'United States' };
+}
+
+function parseSites(req) {
+  const available = Object.keys(scrapers);
+  if (!req.query.sites) {
+    return { sites: ['allStores'] };
+  }
+  const requested = String(req.query.sites)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const valid = requested.filter((s) => available.includes(s));
+  if (valid.length === 0) {
+    return { error: `No valid sites requested. Available sites: ${available.join(', ')}` };
+  }
+  return { sites: valid };
+}
+
+// --- SerpAPI ----------------------------------------------------------
+
+/**
+ * One SerpAPI Google Shopping search. Throws on transport failure,
+ * timeout, HTTP error, or a SerpAPI-level error — callers turn that
+ * into an honest 502 rather than an empty/fake result set.
+ */
+const serpApiSearch = async (query, location = "United States") => {
+  const params = new URLSearchParams({
+    engine: 'google_shopping',
+    q: query,
+    location: location,
+    api_key: getSerpApiKey(),
+    num: 20,
+    sort: 'price_low_to_high'
+  });
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SERPAPI_TIMEOUT_MS);
+  let response;
+  try {
+    response = await fetch(`${SERPAPI_BASE_URL}?${params}`, { signal: controller.signal });
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error(`SerpAPI request timed out after ${SERPAPI_TIMEOUT_MS}ms`);
+    }
+    throw new Error(`SerpAPI request failed: ${error.message}`);
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (!response.ok) {
+    throw new Error(`SerpAPI returned ${response.status}: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  if (data.error) {
+    throw new Error(`SerpAPI error: ${data.error}`);
+  }
+  return data.shopping_results || [];
 };
 
 // Process shopping results and extract pricing data
-const processShoppingResults = (results, query) => {
+const processShoppingResults = (results) => {
   const processedResults = [];
-  
+
   results.forEach(result => {
     try {
-      // Extract price information
       let price = null;
       let priceText = '';
-      
+
       if (result.price) {
         priceText = result.price;
-        // Extract numeric price
         const priceMatch = result.price.match(/[\d,]+\.?\d*/);
         if (priceMatch) {
           price = parseFloat(priceMatch[0].replace(/,/g, ''));
         }
       }
-      
+
       if (price && price > 0) {
         processedResults.push({
           title: result.title || 'Unknown Product',
@@ -127,104 +215,104 @@ const processShoppingResults = (results, query) => {
       console.warn('Error processing result:', error.message);
     }
   });
-  
-  // Sort by price (low to high)
+
   return processedResults.sort((a, b) => a.priceValue - b.priceValue);
 };
 
-// Store-specific search functions for backwards compatibility
+// Store-specific searches
 const scrapers = {
-  async homeDepot(search, zip) {
-    const results = await serpApiSearch(`${search} site:homedepot.com`, zip);
-    return processShoppingResults(results, search).slice(0, 5);
+  async homeDepot(search, location) {
+    const results = await serpApiSearch(`${search} site:homedepot.com`, location);
+    return processShoppingResults(results).slice(0, 5);
   },
-  
-  async lowes(search, zip) {
-    const results = await serpApiSearch(`${search} site:lowes.com`, zip);
-    return processShoppingResults(results, search).slice(0, 5);
+
+  async lowes(search, location) {
+    const results = await serpApiSearch(`${search} site:lowes.com`, location);
+    return processShoppingResults(results).slice(0, 5);
   },
-  
-  async menards(search, zip) {
-    const results = await serpApiSearch(`${search} site:menards.com`, zip);
-    return processShoppingResults(results, search).slice(0, 5);
+
+  async menards(search, location) {
+    const results = await serpApiSearch(`${search} site:menards.com`, location);
+    return processShoppingResults(results).slice(0, 5);
   },
-  
-  async aceHardware(search, zip) {
-    const results = await serpApiSearch(`${search} site:acehardware.com`, zip);
-    return processShoppingResults(results, search).slice(0, 5);
+
+  async aceHardware(search, location) {
+    const results = await serpApiSearch(`${search} site:acehardware.com`, location);
+    return processShoppingResults(results).slice(0, 5);
   },
-  
-  async trueValue(search, zip) {
-    const results = await serpApiSearch(`${search} site:truevalue.com`, zip);
-    return processShoppingResults(results, search).slice(0, 5);
+
+  async trueValue(search, location) {
+    const results = await serpApiSearch(`${search} site:truevalue.com`, location);
+    return processShoppingResults(results).slice(0, 5);
   },
-  
+
   // General shopping search across all stores
-  async allStores(search, zip) {
-    const results = await serpApiSearch(`${search} construction materials`, zip);
-    return processShoppingResults(results, search).slice(0, 10);
+  async allStores(search, location) {
+    const results = await serpApiSearch(`${search} construction materials`, location);
+    return processShoppingResults(results).slice(0, 10);
   }
 };
 
-// Main scraping endpoint with SerpAPI integration (Clerk auth required)
-app.get("/scrape-price", authenticateUser, async (req, res) => {
-  const search = req.query.search || "vinyl flooring";
-  const zip = req.query.zip || "90210";
-  const sites = req.query.sites ? req.query.sites.split(',') : ['allStores']; // Default to general search
+const averagePriceOf = (items) => {
+  const numeric = items
+    .map(item => item.priceValue)
+    .filter(price => typeof price === 'number' && !isNaN(price) && price > 0);
+  if (numeric.length === 0) return null;
+  const average = numeric.reduce((a, b) => a + b, 0) / numeric.length;
+  return `$${average.toFixed(2)}`;
+};
 
-  console.log(`🔍 SerpAPI Search for: "${search}" in location: ${zip}`);
-  console.log(`🏪 Target sites: ${sites.join(', ')}`);
+// --- Routes -----------------------------------------------------------
+
+// Health check (public liveness probe: no data, no SerpAPI call, and no
+// secret values — only whether each is configured).
+app.get("/health", (req, res) => {
+  res.json({
+    status: "healthy",
+    timestamp: new Date().toISOString(),
+    availableSites: Object.keys(scrapers),
+    serpApiConfigured: isSerpApiEnabled(),
+    secretConfigured: isSecretConfigured(),
+    version: '3.0 - Shared-secret server-to-server (Pass Seven)'
+  });
+});
+
+// Main scraping endpoint (API-to-service only: shared secret required)
+app.get("/scrape-price", requireScraperSecret, requireSerpApi, async (req, res) => {
+  const parsed = parseSearchParams(req);
+  if (parsed.error) {
+    return res.status(400).json({ success: false, error: parsed.error });
+  }
+  const sitesParsed = parseSites(req);
+  if (sitesParsed.error) {
+    return res.status(400).json({ success: false, error: sitesParsed.error });
+  }
+  const { search, zip, location } = parsed;
+  const sites = sitesParsed.sites;
 
   try {
-    const allPrices = [];
+    // Fan out in parallel; every call carries its own hard timeout.
+    const perSite = await Promise.all(
+      sites.map(async (site) => ({ site, prices: await scrapers[site](search, location) }))
+    );
+
     const results = {};
-
-    // Check if API key is configured (env-only; never hardcoded)
-    if (!isSerpApiEnabled()) {
-      console.warn('⚠️ SerpAPI key not configured, using fallback data');
-      
-      // Return fallback pricing data
-      const fallbackPrices = generateFallbackPrices(search);
-      return res.json({
-        query: search,
-        location: zip,
-        sites: sites,
-        totalResults: fallbackPrices.length,
-        averagePrice: calculateAveragePrice(fallbackPrices),
-        results: fallbackPrices,
-        breakdown: { fallback: fallbackPrices },
-        timestamp: new Date().toISOString(),
-        source: 'fallback',
-        message: 'Using estimated pricing - configure SERPAPI_KEY for live data'
-      });
+    const allPrices = [];
+    for (const { site, prices } of perSite) {
+      results[site] = prices;
+      allPrices.push(...prices);
     }
+    allPrices.sort((a, b) => a.priceValue - b.priceValue);
 
-    // Scrape from all requested sites using SerpAPI
-    for (const site of sites) {
-      if (scrapers[site]) {
-        console.log(`📡 Searching via SerpAPI: ${site}...`);
-        const prices = await scrapers[site](search, zip);
-        results[site] = prices;
-        allPrices.push(...prices);
-      }
-    }
+    const numericPrices = allPrices.map(item => item.priceValue).filter(p => p > 0);
 
-    // Calculate average price from SerpAPI results
-    const numericPrices = allPrices
-      .map(item => item.priceValue || parseFloat((item.price || '0').replace(/[$,]/g, '')))
-      .filter(price => !isNaN(price) && price > 0);
-
-    const averagePrice = numericPrices.length > 0 
-      ? numericPrices.reduce((a, b) => a + b, 0) / numericPrices.length 
-      : null;
-
-    // Prepare response
-    const response = {
+    return res.json({
+      success: true,
       query: search,
-      location: zip,
+      location: zip || location,
       sites: sites,
       totalResults: allPrices.length,
-      averagePrice: averagePrice ? `$${averagePrice.toFixed(2)}` : null,
+      averagePrice: averagePriceOf(allPrices),
       priceRange: numericPrices.length > 0 ? {
         min: `$${Math.min(...numericPrices).toFixed(2)}`,
         max: `$${Math.max(...numericPrices).toFixed(2)}`
@@ -233,140 +321,61 @@ app.get("/scrape-price", authenticateUser, async (req, res) => {
       breakdown: results,
       timestamp: new Date().toISOString(),
       source: 'serpapi'
-    };
-
-    console.log(`✅ SerpAPI search complete: ${allPrices.length} prices found`);
-    console.log(`💰 Average price: ${response.averagePrice}`);
-
-    res.json(response);
-
+    });
   } catch (err) {
-    console.error('❌ SerpAPI search error:', err);
-    
-    // Fallback to estimated pricing on error
-    const fallbackPrices = generateFallbackPrices(search);
-    res.json({
+    console.error('❌ SerpAPI search error:', err.message);
+    return res.status(502).json({
+      success: false,
+      source: 'error',
       query: search,
-      location: zip,
+      location: zip || location,
       sites: sites,
-      totalResults: fallbackPrices.length,
-      averagePrice: calculateAveragePrice(fallbackPrices),
-      results: fallbackPrices,
-      breakdown: { fallback: fallbackPrices },
-      timestamp: new Date().toISOString(),
-      source: 'fallback',
-      error: err.message,
-      message: 'Using estimated pricing due to API error'
+      totalResults: 0,
+      averagePrice: null,
+      results: [],
+      error: err.message
     });
   }
 });
 
-// Generate fallback pricing data when SerpAPI is not available
-const generateFallbackPrices = (search) => {
-  const searchLower = search.toLowerCase();
-  let basePrice = 4.0; // Default base price per sqft
-  let priceRange = 2.0;
-  
-  // Adjust pricing based on material type
-  if (searchLower.includes('granite') || searchLower.includes('quartz')) {
-    basePrice = 8.0;
-    priceRange = 4.0;
-  } else if (searchLower.includes('hardwood') || searchLower.includes('wood')) {
-    basePrice = 6.0;
-    priceRange = 3.0;
-  } else if (searchLower.includes('tile') || searchLower.includes('ceramic')) {
-    basePrice = 5.0;
-    priceRange = 2.5;
-  } else if (searchLower.includes('vinyl') || searchLower.includes('laminate')) {
-    basePrice = 3.5;
-    priceRange = 1.5;
-  } else if (searchLower.includes('carpet')) {
-    basePrice = 2.5;
-    priceRange = 1.0;
-  }
-  
-  // Generate sample prices
-  const stores = ['Home Depot', 'Lowe\'s', 'Menards', 'Ace Hardware', 'Local Supplier'];
-  const fallbackPrices = [];
-  
-  stores.forEach((store, index) => {
-    const variation = (Math.random() - 0.5) * priceRange;
-    const price = basePrice + variation;
-    fallbackPrices.push({
-      title: `${search} - ${store}`,
-      price: `$${price.toFixed(2)}`,
-      priceValue: price,
-      source: store,
-      link: '#',
-      thumbnail: null,
-      rating: (4.0 + Math.random()).toFixed(1),
-      reviews: Math.floor(Math.random() * 500) + 50,
-      delivery: 'Available',
-      shipping: index < 2 ? 'Free shipping' : null
-    });
-  });
-  
-  return fallbackPrices.sort((a, b) => a.priceValue - b.priceValue);
-};
-
-// Calculate average price from results
-const calculateAveragePrice = (prices) => {
-  const numericPrices = prices
-    .map(item => item.priceValue || parseFloat((item.price || '0').replace(/[$,]/g, '')))
-    .filter(price => !isNaN(price) && price > 0);
-  
-  if (numericPrices.length === 0) return null;
-  
-  const average = numericPrices.reduce((a, b) => a + b, 0) / numericPrices.length;
-  return `$${average.toFixed(2)}`;
-};
-
-// Health check endpoint (public liveness probe: no data, no SerpAPI call)
-app.get("/health", (req, res) => {
-  const apiConfigured = isSerpApiEnabled();
-  res.json({ 
-    status: "healthy", 
-    timestamp: new Date().toISOString(),
-    availableSites: Object.keys(scrapers),
-    serpApiConfigured: apiConfigured,
-    serpApiStatus: apiConfigured ? 'configured' : 'using fallback pricing',
-    version: '2.0 - SerpAPI Integration'
-  });
-});
-
-// Site-specific endpoints (Clerk auth required)
-app.get("/scrape/:site", authenticateUser, async (req, res) => {
+// Site-specific endpoint (shared secret required)
+app.get("/scrape/:site", requireScraperSecret, requireSerpApi, async (req, res) => {
   const site = req.params.site;
-  const search = req.query.search || "vinyl flooring";
-  const zip = req.query.zip || "90210";
-
   if (!scrapers[site]) {
-    return res.status(400).json({ 
-      error: "Invalid site", 
-      availableSites: Object.keys(scrapers) 
+    return res.status(400).json({
+      success: false,
+      error: "Invalid site",
+      availableSites: Object.keys(scrapers)
     });
+  }
+  const parsed = parseSearchParams(req);
+  if (parsed.error) {
+    return res.status(400).json({ success: false, error: parsed.error });
   }
 
   try {
-    const prices = await scrapers[site](search, zip);
-    res.json({
+    const prices = await scrapers[site](parsed.search, parsed.location);
+    return res.json({
+      success: true,
       site: site,
-      query: search,
-      zip: zip,
+      query: parsed.search,
+      zip: parsed.zip,
       results: prices,
-      count: prices.length
+      count: prices.length,
+      source: 'serpapi'
     });
   } catch (err) {
-    res.status(500).json({ 
-      error: `${site} scraping failed`, 
-      message: err.message 
+    return res.status(502).json({
+      success: false,
+      source: 'error',
+      error: `${site} scraping failed`,
+      message: err.message
     });
   }
 });
 
-// Get available sites and SerpAPI info (Clerk auth required)
-app.get("/sites", authenticateUser, (req, res) => {
-  const apiConfigured = isSerpApiEnabled();
+// Available sites + configuration status (shared secret required)
+app.get("/sites", requireScraperSecret, (req, res) => {
   res.json({
     availableSites: Object.keys(scrapers),
     descriptions: {
@@ -378,40 +387,19 @@ app.get("/sites", authenticateUser, (req, res) => {
       allStores: "All Stores - General shopping search across multiple retailers (via SerpAPI)"
     },
     serpApi: {
-      configured: apiConfigured,
-      status: apiConfigured ? 'Live pricing via Google Shopping' : 'Fallback pricing estimates',
-      features: [
-        'Real-time pricing from Google Shopping',
-        'Multiple store comparison',
-        'Product ratings and reviews',
-        'Delivery and shipping information',
-        'Price range analysis'
-      ]
+      configured: isSerpApiEnabled(),
+      status: isSerpApiEnabled() ? 'Live pricing via Google Shopping' : 'Not configured (SERPAPI_KEY missing)'
     }
   });
 });
 
 if (require.main === module) {
   app.listen(PORT, () => {
-  const apiConfigured = isSerpApiEnabled();
-
-  console.log(`🚀 AlphaQuote SerpAPI Price Scraper v2.0 running at http://localhost:${PORT}`);
-  console.log(`📊 Available sites: ${Object.keys(scrapers).join(', ')}`);
-  console.log(`🔗 Health check: http://localhost:${PORT}/health`);
-  console.log(`📋 Available sites: http://localhost:${PORT}/sites`);
-  console.log(`💡 Usage: http://localhost:${PORT}/scrape-price?search=vinyl+flooring&zip=90210&sites=allStores`);
-  console.log('');
-  
-  if (apiConfigured) {
-    console.log('✅ SerpAPI configured - Live pricing enabled');
-    console.log('🛒 Google Shopping integration active');
-  } else {
-    console.log('⚠️ SerpAPI not configured - Using fallback pricing');
-    console.log('💡 Set SERPAPI_KEY environment variable for live pricing');
-    console.log('🔗 Get API key: https://serpapi.com/');
-  }
-  
-  console.log('');
+    console.log(`🚀 AlphaQuote Price Scraper v3.0 running at http://localhost:${PORT}`);
+    console.log(`📊 Available sites: ${Object.keys(scrapers).join(', ')}`);
+    console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+    console.log(`🔐 Shared secret: ${isSecretConfigured() ? 'configured' : 'NOT SET — data routes will fail closed (503)'}`);
+    console.log(`💡 SerpAPI: ${isSerpApiEnabled() ? 'configured — live pricing enabled' : 'NOT SET — data routes will answer 503 unconfigured'}`);
   });
 }
 

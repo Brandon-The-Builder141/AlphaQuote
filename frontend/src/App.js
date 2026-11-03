@@ -19,6 +19,7 @@ import Receipts from './pages/Receipts';
 import ReceiptDetail from './pages/ReceiptDetail';
 import Vendors from './pages/Vendors';
 import VendorNew from './pages/VendorNew';
+import VendorEdit from './pages/VendorEdit';
 import ProjectBudget from './pages/ProjectBudget';
 import Analytics from './pages/Analytics';
 import FollowUps from './pages/FollowUps';
@@ -212,6 +213,13 @@ function App() {
             <ProtectedRoute>
               <Layout>
                 <VendorNew />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/vendors/:id/edit" element={
+            <ProtectedRoute>
+              <Layout>
+                <VendorEdit />
               </Layout>
             </ProtectedRoute>
           } />

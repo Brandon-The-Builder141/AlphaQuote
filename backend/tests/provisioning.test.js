@@ -6,8 +6,10 @@
  *   (previously broken: the schema had no clerkId column)
  * - tenant resolution backfills clerkId onto legacy email-matched rows
  * - a provisioned user's data is scoped to them (cross-tenant -> 404)
- * - the scraper service rejects unauthenticated calls (401) and serves
- *   authenticated ones; its /health probe stays public
+ * - the scraper service (Pass Seven contract) is called server-to-server
+ *   by the main API only: data routes require the shared secret header
+ *   (401 without/wrong), /health stays public, and with no SERPAPI_KEY
+ *   the service answers an honest 503 'unconfigured' — never fake prices
  */
 
 const { test, before, after } = require('node:test');
@@ -75,8 +77,11 @@ before(async () => {
   });
   tenantA = { contractor, user, vendor, receipt };
 
-  // The scraper is a separate Express app; Clerk's verifyToken is already
-  // mocked by startTestServer, and the scraper shares that middleware.
+  // The scraper is a separate Express app. Pass Seven: it no longer uses
+  // Clerk at all — the main API calls it server-to-server with a shared
+  // secret (SCRAPER_SHARED_SECRET), read lazily from the environment.
+  process.env.SCRAPER_SHARED_SECRET = 'provisioning-test-scraper-secret';
+  delete process.env.SERPAPI_KEY;
   const scraperApp = require('../server/scraper.js');
   scraperServer = await new Promise((resolve) => {
     const s = scraperApp.listen(0, '127.0.0.1', () => resolve(s));
@@ -243,19 +248,66 @@ test('a sync-provisioned user is scoped to their own tenant (cross-tenant -> 404
   assert.ok(!ids.includes(tenantA.receipt.id));
 });
 
-test('scraper: data routes return 401 without a token', async () => {
+const scraperSecret = { 'x-scraper-secret': 'provisioning-test-scraper-secret' };
+
+test('scraper: data routes return 401 without (or with a wrong) shared secret', async () => {
   for (const route of ['/sites', '/scrape-price?search=vinyl', '/scrape/homeDepot?search=vinyl']) {
-    const res = await fetch(`${scraperBaseUrl}${route}`);
-    assert.equal(res.status, 401, `GET ${route} should be 401, got ${res.status}`);
+    const noSecret = await fetch(`${scraperBaseUrl}${route}`);
+    assert.equal(noSecret.status, 401, `GET ${route} without secret should be 401, got ${noSecret.status}`);
+
+    const wrongSecret = await fetch(`${scraperBaseUrl}${route}`, {
+      headers: { 'x-scraper-secret': 'not-the-secret' }
+    });
+    assert.equal(wrongSecret.status, 401, `GET ${route} with wrong secret should be 401, got ${wrongSecret.status}`);
+
+    // A browser-held Clerk token is NOT accepted anymore (Pass Seven):
+    // the only caller is the main API, server-to-server.
+    const clerkToken = await fetch(`${scraperBaseUrl}${route}`, {
+      headers: tokenFor('alpha@test.local')
+    });
+    assert.equal(clerkToken.status, 401, `GET ${route} with a Clerk token should be 401, got ${clerkToken.status}`);
   }
 });
 
-test('scraper: data routes serve an authenticated caller; /health stays public', async () => {
-  const sites = await fetch(`${scraperBaseUrl}/sites`, {
-    headers: tokenFor('alpha@test.local')
-  });
+test('scraper: data routes serve the secret-bearing caller; /health stays public', async () => {
+  const sites = await fetch(`${scraperBaseUrl}/sites`, { headers: scraperSecret });
   assert.equal(sites.status, 200);
+  const sitesBody = await sites.json();
+  assert.ok(sitesBody.availableSites.includes('allStores'));
 
   const health = await fetch(`${scraperBaseUrl}/health`);
   assert.equal(health.status, 200);
+  const healthBody = await health.json();
+  assert.equal(healthBody.secretConfigured, true);
+  assert.equal(healthBody.serpApiConfigured, false);
+});
+
+test('scraper: no SERPAPI_KEY -> honest 503 unconfigured, never fabricated prices', async () => {
+  const res = await fetch(`${scraperBaseUrl}/scrape-price?search=vinyl+flooring`, {
+    headers: scraperSecret
+  });
+  assert.equal(res.status, 503);
+  const body = await res.json();
+  assert.equal(body.success, false);
+  assert.equal(body.source, 'unconfigured');
+  assert.deepEqual(body.results, []);
+  assert.equal(body.averagePrice, null);
+});
+
+test('scraper: input validation rejects a missing search term', async () => {
+  // Validation runs after auth but before the SerpAPI gate only when a key
+  // exists; with no key the honest 503 wins. Set a throwaway key so the
+  // validation path is what answers here.
+  process.env.SERPAPI_KEY = 'validation-only-key';
+  try {
+    const res = await fetch(`${scraperBaseUrl}/scrape-price`, { headers: scraperSecret });
+    assert.equal(res.status, 400);
+
+    const badSite = await fetch(`${scraperBaseUrl}/scrape-price?search=vinyl&sites=notAStore`, {
+      headers: scraperSecret
+    });
+    assert.equal(badSite.status, 400);
+  } finally {
+    delete process.env.SERPAPI_KEY;
+  }
 });

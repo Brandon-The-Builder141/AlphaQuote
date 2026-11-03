@@ -11,7 +11,7 @@
  * an Authorization header, pass through untouched.
  */
 
-import { API_BASE_URL, SCRAPER_URL } from '../config/env';
+import { API_BASE_URL } from '../config/env';
 
 const originalFetch = window.fetch.bind(window);
 
@@ -24,12 +24,12 @@ export function installApiAuthInterceptor() {
   window.fetch = async (input, init = {}) => {
     try {
       const url = typeof input === 'string' ? input : input && input.url;
-      // The price scraper service requires the same Clerk auth since the
-      // Pass Two finish, so its URL is treated as an API request too.
+      // Pass Seven: the browser only ever calls the main API. The price
+      // scraper is reached server-to-server by the API itself (shared
+      // secret), so its URL no longer needs — or gets — a Clerk token.
       const isApiRequest =
         typeof url === 'string' &&
         (url.startsWith(API_BASE_URL) ||
-          url.startsWith(SCRAPER_URL) ||
           url.startsWith('/api'));
 
       if (isApiRequest) {

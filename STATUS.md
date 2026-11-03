@@ -202,3 +202,71 @@ unchanged. Frontend production build passes, and the built bundle
 contains no setup-wizard strings. Boot smoke verified: fresh-user
 sync → `GET /api/users/me` shows `setupCompletedAt` set and the
 "Iron Legion Contracting LLC" account.
+
+---
+
+## Pass Seven — Vendors, Scraper, Receipts + full sweep (Nov 3, 2026)
+
+Branch `pass7-hardening` (off `pass4-postgres` @ 6e24d21). NOT merged,
+NOT pushed — Solen reviews and lands. Full report:
+`~/workspace/alphaquote/pass7-report-2026-11-03.md`.
+
+### Vendors — fixed
+- **Edit was impossible:** the page's Edit button navigated to
+  `/vendors/:id/edit`, a route that did not exist. Added the route, a
+  `VendorEdit` page, and the `GET /api/vendors/:id` read it needs.
+- **Delete died with an opaque 500** for any vendor with receipts
+  (Receipt.vendorId is a required FK; receipts auto-create vendors, so
+  nearly every real vendor hit it). DELETE now answers an honest 409
+  with the receipt count and the remedy.
+
+### Scraper — rebuilt contract, deploy-ready
+- The old contract could never work live: the service demanded a
+  browser-held Clerk token the frontend never sent, and it was never
+  deployed. New contract: only the API calls it, server-to-server,
+  with `SCRAPER_SHARED_SECRET` in an `x-scraper-secret` header
+  (constant-time compare; unset secret fails closed 503).
+- Fabricated random "fallback prices" deleted. No SERPAPI_KEY ->
+  honest 503 `unconfigured`, zero results. Upstream errors -> 502.
+  SerpAPI calls carry a hard timeout; inputs are validated.
+- API gained `GET /api/prices/lookup` (timeout + one retry, honest
+  `unconfigured`/`unavailable` degradation, price null — never a fake
+  number), `GET /api/prices/by-material` (tenant's learned prices),
+  and `GET /api/prices/status`. The frontend price chain (receipt DB
+  step + scraped step) and the status widget now run through these.
+- `render.yaml` gains the `alphaquote-scraper` service additively;
+  the secret is `generateValue` on the scraper and a `fromService`
+  reference on the API. One Brandon step remains (Blueprint apply +
+  one SERPAPI_KEY paste) — detailed in the report.
+
+### Receipts — maintainable
+- Manual receipts (no line items — the ReceiptNew manual path) save
+  with one synthetic reconciling line; it never teaches a price.
+- Line totals are computed server-side; totals reconcile by
+  construction. Invalid items/dates are 400s, not 500s.
+- Vendor matching is case-insensitive (JS-side over the tenant's
+  vendors — identical on SQLite and Postgres).
+- PUT can replace line items (total derives; prices re-taught),
+  validates project ownership like POST, and only touches `verified`
+  when status is sent. List/detail carry `status` (the page filter
+  and badges needed it); the edit form's date field gets YYYY-MM-DD.
+
+### Sweep — all 50 authenticated routes exercised, three more bugs caught
+- `GET /api/scheduled-jobs/statistics` was registered after `/:id`
+  and unreachable (404 forever). Moved above it.
+- Regional-material search used Prisma `mode: 'insensitive'`
+  (Postgres-only; 500s on SQLite). Matching now happens in JS with
+  identical semantics on both dialects. No local Postgres was
+  available in the sandbox; the dialect review is code-level and is
+  itemized in the report.
+- `PUT /api/calendar-sync-settings` spread the raw body into Prisma
+  (any extra field = 500). Now whitelisted.
+- Scheduled-job create/update validate referenced project/estimate
+  ownership and date sanity.
+- `/api/analytics` growth was `Math.random()` per load; now computed
+  period-over-period from real tenant data (determinism test).
+
+### Tests
+68/68 passing (40 at pass start; +15 pass7-hardening, +11
+pass7-sweep, +2 net scraper-contract tests in provisioning).
+Frontend production build passes.
