@@ -260,20 +260,16 @@ test('day: cross-tenant isolation — B has its own empty card for the same date
 
 test('summary: aggregates real engine data for the tenant only', async () => {
   const now = new Date();
-  // A project + estimate on an 'active' project (quotes out).
-  const project = await ctx.prisma.project.create({
+  // Pass Ten: "quotes out" reads the Quote Ledger, so seed a real sent
+  // quote (the Pass Nine estimate-on-active-project approximation is
+  // gone — an Estimate row alone no longer counts).
+  await ctx.prisma.quote.create({
     data: {
-      name: 'Summary Test Job',
-      status: 'active',
-      contractorAccountId: ids.tenantId,
-      createdById: ids.userId
-    }
-  });
-  await ctx.prisma.estimate.create({
-    data: {
-      projectId: project.id,
-      estimateType: 'manual',
-      totalCost: 5000,
+      quoteNumber: 'IL-0001',
+      status: 'sent',
+      customerName: 'Summary Customer',
+      data: '{}',
+      total: 5000,
       contractorAccountId: ids.tenantId,
       createdById: ids.userId
     }

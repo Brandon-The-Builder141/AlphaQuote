@@ -115,7 +115,7 @@ export default function Command() {
         label: 'Quotes out',
         value: String(summary.quotesOut.count),
         sub: `${money(summary.quotesOut.total)} awaiting response`,
-        path: '/estimate'
+        path: '/quotes'
       },
       {
         icon: BellRing,
@@ -298,6 +298,49 @@ export default function Command() {
             )}
           </section>
         </div>
+
+        {/* QUOTES — the durable ledger at a glance (Pass 10) */}
+        <section className="card p-6 mb-6">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h3 className="font-display text-[1.5rem] leading-none">Quotes</h3>
+            <Link to="/quotes" className="text-primary hover:text-primary/80 text-sm font-semibold inline-flex items-center gap-1">
+              Open the ledger <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+          {summary && summary.quotes ? (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+              <div>
+                <p className="stat-label mb-1">Drafts</p>
+                <p className="font-display text-[1.6rem] leading-none text-slate-100">
+                  {summary.quotes.drafts.count}
+                </p>
+              </div>
+              <div>
+                <p className="stat-label mb-1">Sent — awaiting action</p>
+                <p className="font-display text-[1.6rem] leading-none text-slate-100">
+                  {summary.quotes.sent.count}
+                  <span className="text-base text-slate-400"> · {money(summary.quotes.sent.total)}</span>
+                </p>
+              </div>
+              <div>
+                <p className="stat-label mb-1">Accepted work</p>
+                <p className="font-display text-[1.6rem] leading-none text-slate-100">
+                  {summary.quotes.accepted.count}
+                  <span className="text-base text-slate-400"> · {money(summary.quotes.accepted.total)}</span>
+                </p>
+              </div>
+              <div>
+                <p className="stat-label mb-1">Expired / declined</p>
+                <p className="font-display text-[1.6rem] leading-none text-slate-100">
+                  {summary.quotes.closedOut.count}
+                  <span className="text-base text-slate-400"> · {money(summary.quotes.closedOut.total)}</span>
+                </p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-slate-500">Quote totals load with the day's summary.</p>
+          )}
+        </section>
 
         {/* His numbers — compact strip (pricingConstants, unchanged values) */}
         <div className="card px-6 py-4 flex flex-wrap items-center gap-x-8 gap-y-2 text-sm">

@@ -36,6 +36,7 @@ export default function EstimateSummaryStep({ data, updateData, onBack }) {
   const handleGenerateEstimate = () => {
     // Convert wizard data to format expected by EstimateResult
     const estimateData = {
+      quoteId: data.quoteId || undefined,
       projectInfo: {
         clientName: data.clientName,
         jobType: data.jobType,

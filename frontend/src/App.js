@@ -9,6 +9,8 @@ import Layout from './components/Layout';
 import { validateEnv, logConfig } from './config/env';
 import Command from './pages/Command';
 import Leads from './pages/Leads';
+import Quotes from './pages/Quotes';
+import QuoteDetail from './pages/QuoteDetail';
 import Queue from './pages/Queue';
 import SignInGate from './pages/SignInGate';
 import EstimateForm from './EstimateForm';
@@ -145,6 +147,20 @@ function App() {
             <ProtectedRoute>
               <Layout>
                 <Leads />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/quotes" element={
+            <ProtectedRoute>
+              <Layout>
+                <Quotes />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/quotes/:id" element={
+            <ProtectedRoute>
+              <Layout>
+                <QuoteDetail />
               </Layout>
             </ProtectedRoute>
           } />

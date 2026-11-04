@@ -29,7 +29,8 @@ import { COMPANY_NAME } from '../config/site';
 // monogram; phones get the top bar + bottom tab bar.
 const PAGE_TITLES = [
   ['/estimate/advanced', 'Advanced Estimator'],
-  ['/estimate', 'Quotes'],
+  ['/quotes', 'Quotes'],
+  ['/estimate', 'New Estimate'],
   ['/result', 'Estimate Result'],
   ['/leads', 'Lead Board'],
   ['/queue', 'Approval Queue'],
@@ -60,7 +61,7 @@ export default function Layout({ children }) {
 
   const primaryItems = [
     { icon: Home, label: 'Command', path: '/dashboard', alwaysShow: true },
-    { icon: Calculator, label: 'Quotes', path: '/estimate', alwaysShow: true },
+    { icon: Calculator, label: 'Quotes', path: '/quotes', alwaysShow: true },
     { icon: Target, label: 'Leads', path: '/leads', alwaysShow: true },
     { icon: ListChecks, label: 'Queue', path: '/queue', alwaysShow: true },
     { icon: Receipt, label: 'Receipts', path: '/receipts', alwaysShow: true }
@@ -83,6 +84,9 @@ export default function Layout({ children }) {
     if (path === '/dashboard') {
       return location.pathname === '/' || location.pathname.startsWith('/dashboard');
     }
+    if (path === '/quotes') {
+      return location.pathname.startsWith('/quotes') || location.pathname === '/result';
+    }
     if (path === '/estimate') {
       return location.pathname === '/estimate' || location.pathname === '/result';
     }
@@ -100,7 +104,7 @@ export default function Layout({ children }) {
   // Bottom tab bar (mobile primary nav) — the five primary surfaces.
   const tabItems = [
     { icon: Home, label: 'Command', path: '/dashboard', active: isActive('/dashboard') },
-    { icon: Calculator, label: 'Quotes', path: '/estimate', active: isActive('/estimate') },
+    { icon: Calculator, label: 'Quotes', path: '/quotes', active: isActive('/quotes') },
     { icon: Target, label: 'Leads', path: '/leads', active: isActive('/leads') },
     { icon: ListChecks, label: 'Queue', path: '/queue', active: isActive('/queue') },
     { icon: Receipt, label: 'Receipts', path: '/receipts', active: isActive('/receipts') }

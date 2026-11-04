@@ -154,6 +154,7 @@ model Project {
   tasks        Task[]
   estimates    Estimate[]
   receipts     Receipt[]
+  quotes       Quote[]
   scheduledJobs ScheduledJob[]
   
   // Multi-user relationships
@@ -343,6 +344,8 @@ model ContractorAccount {
   leads       Lead[]
   opsItems    OpsItem[]
   dayCards    DayCard[]
+  quotes      Quote[]
+  quoteCounter QuoteCounter?
 }
 
 // User accounts within contractor accounts
@@ -375,6 +378,7 @@ model User {
   createdLeads        Lead[]
   createdOpsItems     OpsItem[]
   createdDayCards     DayCard[]
+  createdQuotes       Quote[]
 }
 
 // Project and Estimate models already defined above
@@ -502,6 +506,8 @@ model Lead {
   createdBy           User?              @relation(fields: [createdById], references: [id])
   createdById         String?
 
+  quotes              Quote[]
+
   @@unique([contractorAccountId, parcelId])
 }
 
@@ -544,4 +550,95 @@ model DayCard {
   createdById         String?
 
   @@unique([contractorAccountId, date])
+}
+
+// Pass Ten (Durable Quote Ledger): a quote is a first-class, persisted
+// business record — not browser state. It survives refresh, logout,
+// browser changes, and deploys because it lives here, in Postgres.
+//
+//  - `quoteNumber` is stable and human-readable (IL-0001, IL-0002, ...),
+//    assigned from the tenant's QuoteCounter row inside a transaction.
+//    Never random, never reused within a tenant.
+//  - `data` holds the full working quote document as JSON in exactly the
+//    shape the PDF renderer consumes (projectInfo, workItems, rooms,
+//    markup, tax, discount, totals, notes, estimateType), so the working
+//    copy and the issued copy can never drift into different formats.
+//  - Status walks: draft -> sent -> accepted / declined / expired, with
+//    archived reachable from every state. `viewed` is a supported status
+//    in the model ONLY: no endpoint sets it, because there is no real
+//    customer-view tracking mechanism, and this app does not invent
+//    customer activity. If a tracked share link ever ships, the status
+//    is ready for it.
+//  - Editing a non-draft quote never rewrites history: POST
+//    /api/quotes/:id/revise freezes the outgoing version (see
+//    QuoteRevision) and returns the quote to draft at version + 1.
+model Quote {
+  id            String    @id @default(cuid())
+  quoteNumber   String    // IL-0001 — per-tenant sequence, see QuoteCounter
+  status        String    @default("draft") // draft, sent, viewed, accepted, declined, expired, archived
+  version       Int       @default(1)       // current revision number (1-based)
+  customerName  String
+  customerEmail String?
+  customerPhone String?
+  address       String?
+  jobType       String?
+  data          String    // JSON: full working quote document (PDF shape)
+  subtotal      Decimal   @default(0)
+  total         Decimal   @default(0)
+  sentAt        DateTime? // when the current version was marked sent
+  expiresAt     DateTime? // sentAt + quote validity days (14 per pricing sheet)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Optional links: the lead this quote came from, and the project/job
+  // it turns into when accepted.
+  lead          Lead?     @relation(fields: [leadId], references: [id])
+  leadId        String?
+  project       Project?  @relation(fields: [projectId], references: [id])
+  projectId     String?
+
+  revisions     QuoteRevision[]
+
+  // Multi-user relationships
+  contractorAccount   ContractorAccount? @relation(fields: [contractorAccountId], references: [id], onDelete: Cascade)
+  contractorAccountId String?
+  createdBy           User?              @relation(fields: [createdById], references: [id])
+  createdById         String?
+
+  @@unique([contractorAccountId, quoteNumber])
+  @@index([contractorAccountId, status])
+}
+
+// Pass Ten (Durable Quote Ledger): the frozen record of one issued
+// version of a quote. Written when a version is marked sent (and,
+// defensively, when a non-draft version is revised away). `snapshot`
+// is the complete quote document at freeze time — customer details,
+// line items, materials, labor, markup, tax, terms, notes, totals,
+// company details, quote number, and timestamps — everything needed to
+// regenerate the identical PDF later via GET /api/quotes/:id/pdf-data.
+// `checksum` is the SHA-256 of the canonical snapshot JSON, so any
+// later tampering or drift is detectable. Rows are never updated after
+// creation.
+model QuoteRevision {
+  id        String   @id @default(cuid())
+  quote     Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  quoteId   String
+  version   Int      // the Quote.version this snapshot froze
+  status    String   // quote status at freeze time (e.g. "sent")
+  snapshot  String   // JSON: the complete frozen quote document
+  checksum  String   // SHA-256 hex of the canonical snapshot JSON
+  total     Decimal  @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([quoteId, version])
+}
+
+// Pass Ten (Durable Quote Ledger): per-tenant quote-number sequence.
+// One row per contractor account; the API increments `nextNumber`
+// inside a transaction when a quote is created, so numbers are
+// deterministic, gapless per tenant, and never random.
+model QuoteCounter {
+  contractorAccount   ContractorAccount @relation(fields: [contractorAccountId], references: [id], onDelete: Cascade)
+  contractorAccountId String            @id
+  nextNumber          Int               @default(1)
 }

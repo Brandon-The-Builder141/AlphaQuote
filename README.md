@@ -32,6 +32,65 @@
 
 
 
+## 📌 **Current state (2026-11-04) — read this first**
+
+This deployment is **Iron Legion Contracting LLC's internal command
+center** — a single-operator tool, not a public SaaS product. The V3.0
+marketing copy below predates that direction. **[STATUS.md](STATUS.md)
+is the source of truth** for what is actually built and verified.
+
+### Quote Ledger (Pass Ten, 2026-11-04)
+
+Quotes are durable, first-class business records in PostgreSQL — not
+browser state. A quote survives refresh, logout, browser changes, and
+deploys, and is reopened by its durable id at `/quotes/:id`.
+
+- **Model:** `Quote` (working record) + `QuoteRevision` (frozen issued
+  snapshots) + `QuoteCounter` (per-tenant numbering sequence), via
+  Prisma migration `20261104120000_pass10_quote_ledger`.
+- **Quote numbers:** stable and human-readable — `IL-0001`,
+  `IL-0002`, … — assigned deterministically per tenant inside the
+  create transaction. Never random, never reused.
+- **Statuses:** `draft → sent → accepted / declined / expired`, with
+  `archived` reachable from every state. A sent/viewed quote past its
+  own 14-day validity window is mechanically moved to `expired` on
+  read. **`viewed` is supported in the model only**: no endpoint sets
+  it, because there is no real customer-view tracking mechanism, and
+  the ledger does not invent customer activity.
+- **Drafts autosave** while the estimate is being edited (the wizard
+  creates the draft on first meaningful input and keeps saving it;
+  the quote detail page autosaves its draft fields too).
+- **Versioning:** only drafts are editable. Editing a sent quote goes
+  through an explicit *revise*: the outgoing version stays frozen and
+  the quote returns to draft at version + 1. Historical numbers are
+  never silently rewritten.
+- **PDF snapshots:** marking a quote `sent` freezes the complete quote
+  document — customer details, line items, materials, labor, markup,
+  tax, terms, notes, totals, company details, quote number, and
+  timestamps — with a SHA-256 checksum of its canonical JSON.
+  `GET /api/quotes/:id/pdf-data` serves the frozen document (with a
+  `checksumValid` flag), so the issued PDF can be regenerated
+  identically at any time from the quote page.
+- **API (all authenticated + tenant-scoped):** `POST /api/quotes`,
+  `GET /api/quotes?status=&search=`, `GET /api/quotes/:id`,
+  `PUT /api/quotes/:id` (drafts only; 409 otherwise),
+  `DELETE /api/quotes/:id` (drafts only),
+  `POST /api/quotes/:id/status`, `POST /api/quotes/:id/revise`,
+  `GET /api/quotes/:id/pdf-data?version=`,
+  `POST /api/quotes/:id/project` (create/link the job a quote turns
+  into). A quote can also link back to the lead it came from
+  (`leadId`).
+- **Command center:** `/quotes` is the ledger (filter by status,
+  search by customer or quote number); the Command home's Quotes area
+  and "Quotes out" tile read real Quote data (drafts, sent awaiting
+  action, accepted work, expired/declined totals) via
+  `GET /api/ops/summary`.
+- **Totals note:** quote totals are computed by the app's
+  deterministic estimate calculator and frozen as issued; the
+  snapshot freezes exactly what was quoted.
+
+---
+
 ## 🌟 **What's New in V3.0**
 
 

@@ -417,3 +417,77 @@ changes (`git diff` touches nothing under `frontend/src/services/` or
   `EstimateForm.js`), `authService` demo-mode helpers, and
   demo-fixture branches in a few services. Removing them is a
   cleanup-pass candidate, not this pass.
+
+## Pass Ten — Durable Quote Ledger (2026-11-04, branch `pass10-quote-ledger`)
+
+- **Problem fixed:** a quote used to exist only as React route state
+  (`/result` rendered `location.state`; the advanced form even
+  navigated to a `/estimate-results` route that does not exist). Refresh,
+  logout, or a second browser lost it. Pass Nine's "quotes out" tile
+  also had to approximate from the status-less Estimate model.
+- **Schema/migration:** `Quote` + `QuoteRevision` + `QuoteCounter`
+  added to both Prisma schemas; Postgres migration
+  `20261104120000_pass10_quote_ledger` (generated with
+  `prisma migrate diff` from the Pass Nine datamodel; runs via
+  `migrate deploy` on boot). No existing estimate/project data was
+  converted — the legacy `Estimate` rows carry none of the quote
+  document (customer, items, terms) a ledger record needs, and
+  inventing it would falsify records. Quotes created from now on are
+  ledger records; projects created from quotes link back via
+  `Quote.projectId`.
+- **Numbers:** `IL-0001`, `IL-0002`, … — per-tenant sequence from the
+  `QuoteCounter` row, assigned inside the create transaction; the
+  `(contractorAccountId, quoteNumber)` unique index is the backstop.
+  Never random.
+- **API (`/api/quotes`, all tenant-scoped):** create, list (status
+  filter + customer/number search), get by id, update (drafts only —
+  non-drafts get 409 `REVISION_REQUIRED`), delete (drafts only),
+  `POST /:id/status`, `POST /:id/revise`, `GET /:id/pdf-data`,
+  `POST /:id/project` (create/link the job). A quote may link the lead
+  it came from (`leadId`, validated inside the tenant).
+- **Statuses:** draft → sent → accepted / declined / expired, archived
+  from anywhere. Expiry is mechanical: a sent quote past its own
+  14-day validity window (stored `expiresAt`) is moved to `expired`
+  on read. **`viewed` is model-supported only** — no endpoint sets it
+  (setting it manually returns 400), because there is no real
+  customer-view tracking; transitions out of it are defined so it
+  works if tracking ever ships.
+- **Versioning + PDF integrity:** marking sent freezes a
+  `QuoteRevision` — the complete quote document (customer, line items,
+  materials, labor, markup, tax, terms, notes, totals, company
+  details, quote number, issued/expiry timestamps) plus a SHA-256
+  checksum of its canonical JSON. `GET /:id/pdf-data` serves the
+  frozen document with a `checksumValid` flag, so the issued PDF can
+  be regenerated identically and tampering is detectable. Revising a
+  sent quote freezes the outgoing version (if somehow unfrozen) and
+  returns the quote to draft at version + 1; history is never
+  rewritten.
+- **Frontend:** `/quotes` ledger page (status chips, search, totals);
+  `/quotes/:id` durable detail (replaces the route-state result view;
+  `/result` is now a persistence handoff that saves and redirects to
+  the durable route; the advanced form's dead `/estimate-results`
+  navigation now goes to `/result`); the wizard autosaves a draft
+  while the estimate is being edited and can reopen one via
+  `/estimate?quoteId=`; the detail page autosaves draft fields,
+  walks statuses, downloads the working PDF for drafts and the frozen
+  issued PDF for sent quotes, and creates/links the project. Nav:
+  "Quotes" points at the ledger. Command home: "Quotes out" tile and
+  a new Quotes area (drafts / sent awaiting action / accepted /
+  expired+declined) read real Quote data from `/api/ops/summary`
+  (`summary.quotes` block added; `quotesOut` shape unchanged).
+- **Tests: 102/102 passing** (84 baseline + 18 new in
+  `pass10-quote-ledger.test.js`: creation + per-tenant numbering,
+  autosave + reopen-by-id, list filter/search, tenant isolation,
+  unauthenticated 401, transition rules incl. the `viewed` refusal,
+  snapshot freeze + checksum + tamper detection, revision flow,
+  mechanical expiry, lead/project links, summary integration). The
+  Pass Nine summary test now seeds a real sent Quote (it previously
+  asserted the estimate approximation this pass removes). Frontend
+  production build passes. No frontend test framework exists in this
+  project, so frontend validation is the production build + the
+  manual notes in the pass report.
+- **Intentionally deferred:** server-side recomputation of quote
+  totals (totals come from the app's deterministic estimate
+  calculator and are frozen as issued); a tracked share link that
+  could one day set `viewed` for real; converting pre-ledger
+  `Estimate` rows into quotes (see above).

@@ -3367,11 +3367,594 @@ app.put('/api/ops/day', requireTenantAuth, async (req, res) => {
   }
 });
 
+// ---------- Quote Ledger (/api/quotes) — Pass Ten ----------
+// A quote is a durable business record in Postgres (Quote model), not
+// browser state: it survives refresh, logout, browser changes, and
+// deploys, and it is reopened by id at /quotes/:id.
+//
+// Rules of the ledger:
+//  - Numbers are per-tenant and deterministic (IL-0001, IL-0002, ...)
+//    from the QuoteCounter row, assigned inside the create transaction.
+//    Never random, never reused.
+//  - Only drafts are editable. Editing a non-draft quote goes through
+//    POST /:id/revise, which freezes the outgoing version and returns
+//    the quote to draft at version + 1 — historical numbers are never
+//    silently rewritten.
+//  - Marking a quote sent freezes an immutable QuoteRevision snapshot:
+//    the complete quote document (customer, line items, materials,
+//    labor, markup, tax, terms, notes, totals, company details, quote
+//    number, timestamps) plus a SHA-256 checksum of its canonical JSON.
+//    GET /:id/pdf-data serves that frozen document, so the issued PDF
+//    can be regenerated identically at any time.
+//  - 'viewed' is a supported status in the model but is NEVER set by
+//    this API: there is no customer-view tracking mechanism, and the
+//    ledger does not invent customer activity. Transitions OUT of
+//    viewed are defined so the status works if real tracking ever
+//    ships.
+//  - Expiry is mechanical, not invented activity: a sent/viewed quote
+//    whose own validity window (sentAt + QUOTE_VALIDITY_DAYS) has
+//    passed is moved to 'expired' on read. The timestamp math comes
+//    from the quote's own stored terms.
+
+const crypto = require('crypto');
+
+const QUOTE_STATUSES = ['draft', 'sent', 'viewed', 'accepted', 'declined', 'expired', 'archived'];
+const QUOTE_TRANSITIONS = {
+  draft: ['sent', 'archived'],
+  sent: ['accepted', 'declined', 'expired', 'archived'],
+  viewed: ['accepted', 'declined', 'expired', 'archived'],
+  accepted: ['archived'],
+  declined: ['archived'],
+  expired: ['archived'],
+  archived: []
+};
+
+function moneyOrZero(value) {
+  const n = parseFloat(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+// Canonical JSON (recursively sorted keys) so a snapshot's checksum is
+// stable regardless of key insertion order.
+function stableStringify(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  const keys = Object.keys(value).sort();
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(',')}}`;
+}
+
+function snapshotChecksum(snapshotDoc) {
+  const { checksum, ...rest } = snapshotDoc;
+  return crypto.createHash('sha256').update(stableStringify(rest)).digest('hex');
+}
+
+// Normalize a create/update body into quote fields. The `data` document
+// is the working quote in the exact shape the PDF renderer consumes;
+// the flat customer columns are derived from the body's top-level
+// fields, falling back to data.projectInfo.
+function normalizeQuotePayload(body) {
+  const rawData = typeof body.data === 'string' ? safeJsonParse(body.data) : body.data;
+  if (!rawData || typeof rawData !== 'object' || Array.isArray(rawData)) {
+    return { error: 'Quote data (the full quote document) is required' };
+  }
+  const info = rawData.projectInfo && typeof rawData.projectInfo === 'object' ? rawData.projectInfo : {};
+  const pick = (...values) => {
+    for (const v of values) {
+      if (typeof v === 'string' && v.trim()) return v.trim();
+    }
+    return null;
+  };
+  return {
+    customerName: pick(body.customerName, info.clientName) || 'Untitled quote',
+    customerEmail: pick(body.customerEmail, info.email),
+    customerPhone: pick(body.customerPhone, info.phone),
+    address: pick(body.address, info.address),
+    jobType: pick(body.jobType, info.jobType),
+    data: rawData
+  };
+}
+
+function safeJsonParse(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function serializeQuote(row, { detail = false } = {}) {
+  const quote = {
+    id: row.id,
+    quoteNumber: row.quoteNumber,
+    status: row.status,
+    version: row.version,
+    customerName: row.customerName,
+    customerEmail: row.customerEmail,
+    customerPhone: row.customerPhone,
+    address: row.address,
+    jobType: row.jobType,
+    subtotal: Number(row.subtotal),
+    total: Number(row.total),
+    sentAt: row.sentAt,
+    expiresAt: row.expiresAt,
+    leadId: row.leadId,
+    projectId: row.projectId,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt
+  };
+  if (detail) {
+    quote.data = typeof row.data === 'string' ? safeJsonParse(row.data) : row.data;
+    if (row.revisions) {
+      quote.revisions = row.revisions.map((r) => ({
+        id: r.id,
+        version: r.version,
+        status: r.status,
+        total: Number(r.total),
+        checksum: r.checksum,
+        createdAt: r.createdAt
+      }));
+    }
+  }
+  return quote;
+}
+
+async function findTenantQuote(req, id) {
+  return prisma.quote.findFirst({
+    where: { AND: [{ id }, scopeWhere(req)] },
+    include: { revisions: { orderBy: { version: 'asc' } } }
+  });
+}
+
+// Mechanical expiry (see section header): a sent/viewed quote past its
+// own validity window becomes 'expired'. Returns the (possibly
+// updated) row.
+async function expireQuoteIfStale(quote) {
+  if (
+    (quote.status === 'sent' || quote.status === 'viewed') &&
+    quote.expiresAt &&
+    new Date(quote.expiresAt) < new Date()
+  ) {
+    return prisma.quote.update({
+      where: { id: quote.id },
+      data: { status: 'expired' },
+      include: { revisions: { orderBy: { version: 'asc' } } }
+    });
+  }
+  return quote;
+}
+
+// Build the frozen snapshot document for one version of a quote and
+// persist it as a QuoteRevision (idempotent per quote+version: the
+// first freeze wins, later calls return the existing row).
+async function freezeQuoteRevision(client, quote, freezeStatus, issuedAt) {
+  const existing = await client.quoteRevision.findUnique({
+    where: { quoteId_version: { quoteId: quote.id, version: quote.version } }
+  });
+  if (existing) return existing;
+
+  const account = await client.contractorAccount.findUnique({
+    where: { id: quote.contractorAccountId || '' }
+  }).catch(() => null);
+  const dataDoc = typeof quote.data === 'string' ? safeJsonParse(quote.data) || {} : quote.data || {};
+  const doc = {
+    ...dataDoc,
+    quoteNumber: quote.quoteNumber,
+    version: quote.version,
+    status: freezeStatus,
+    issuedAt: issuedAt ? new Date(issuedAt).toISOString() : new Date().toISOString(),
+    validDays: pricingDefaults.QUOTE_VALIDITY_DAYS,
+    expiresAt: quote.expiresAt ? new Date(quote.expiresAt).toISOString() : null,
+    company: {
+      name: pricingDefaults.COMPANY_DISPLAY_NAME,
+      legalName: pricingDefaults.COMPANY_LEGAL_NAME,
+      email: account ? account.email : null,
+      phone: account ? account.phone : null,
+      address: account ? account.address : null
+    },
+    customer: {
+      name: quote.customerName,
+      email: quote.customerEmail,
+      phone: quote.customerPhone,
+      address: quote.address
+    },
+    terms: [...pricingDefaults.QUOTE_TERMS]
+  };
+  doc.checksum = snapshotChecksum(doc);
+  return client.quoteRevision.create({
+    data: {
+      quoteId: quote.id,
+      version: quote.version,
+      status: freezeStatus,
+      snapshot: JSON.stringify(doc),
+      checksum: doc.checksum,
+      total: quote.total
+    }
+  });
+}
+
+// Validate an optional lead/project link: it must exist inside the
+// caller's tenant scope. Returns an error message or null.
+async function validateQuoteLinks(req, body) {
+  if (body.leadId !== undefined && body.leadId !== null && body.leadId !== '') {
+    const lead = await prisma.lead.findFirst({
+      where: { AND: [{ id: body.leadId }, scopeWhere(req)] }
+    });
+    if (!lead) return 'leadId does not match a lead in your account';
+  }
+  if (body.projectId !== undefined && body.projectId !== null && body.projectId !== '') {
+    const project = await prisma.project.findFirst({
+      where: { AND: [{ id: body.projectId }, scopeWhere(req)] }
+    });
+    if (!project) return 'projectId does not match a project in your account';
+  }
+  return null;
+}
+
+app.post('/api/quotes', requireTenantAuth, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const fields = normalizeQuotePayload(body);
+    if (fields.error) {
+      return res.status(400).json({ success: false, error: fields.error });
+    }
+    const linkError = await validateQuoteLinks(req, body);
+    if (linkError) {
+      return res.status(400).json({ success: false, error: linkError });
+    }
+
+    // Number assignment + insert in one transaction: the counter row
+    // is the single source of the tenant's sequence (IL-0001, ...).
+    // The (contractorAccountId, quoteNumber) unique index is the
+    // backstop — a collision fails the create instead of duplicating.
+    const quote = await prisma.$transaction(async (tx) => {
+      let counter = await tx.quoteCounter.findUnique({
+        where: { contractorAccountId: req.tenantId }
+      });
+      if (!counter) {
+        counter = await tx.quoteCounter.create({
+          data: { contractorAccountId: req.tenantId, nextNumber: 1 }
+        });
+      }
+      const n = counter.nextNumber;
+      await tx.quoteCounter.update({
+        where: { contractorAccountId: req.tenantId },
+        data: { nextNumber: n + 1 }
+      });
+      return tx.quote.create({
+        data: {
+          quoteNumber: `IL-${String(n).padStart(4, '0')}`,
+          status: 'draft',
+          version: 1,
+          customerName: fields.customerName,
+          customerEmail: fields.customerEmail,
+          customerPhone: fields.customerPhone,
+          address: fields.address,
+          jobType: fields.jobType,
+          data: JSON.stringify(fields.data),
+          subtotal: moneyOrZero(fields.data.subtotal),
+          total: moneyOrZero(fields.data.total),
+          leadId: body.leadId || null,
+          projectId: body.projectId || null,
+          contractorAccountId: req.tenantId,
+          createdById: req.dbUser.id
+        },
+        include: { revisions: true }
+      });
+    });
+
+    res.status(201).json({ success: true, quote: serializeQuote(quote, { detail: true }) });
+  } catch (error) {
+    console.error('Error creating quote:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/quotes', requireTenantAuth, async (req, res) => {
+  try {
+    // Mechanical expiry sweep for this tenant before listing.
+    await prisma.quote.updateMany({
+      where: {
+        AND: [
+          scopeWhere(req),
+          { status: { in: ['sent', 'viewed'] } },
+          { expiresAt: { lt: new Date() } }
+        ]
+      },
+      data: { status: 'expired' }
+    });
+
+    const { status, search } = req.query;
+    const conditions = [scopeWhere(req)];
+    if (status && status !== 'all') {
+      if (!QUOTE_STATUSES.includes(status)) {
+        return res.status(400).json({ success: false, error: 'Invalid quote status' });
+      }
+      conditions.push({ status });
+    }
+    const rows = await prisma.quote.findMany({
+      where: { AND: conditions },
+      orderBy: { updatedAt: 'desc' }
+    });
+    let quotes = rows.map((row) => serializeQuote(row));
+    if (search && String(search).trim()) {
+      // Case-insensitive substring over customer + quote number, done
+      // in JS: exact `contains` is case-sensitive on Postgres, and a
+      // one-operator ledger is small (same pattern as vendor matching).
+      const needle = String(search).trim().toLowerCase();
+      quotes = quotes.filter(
+        (q) =>
+          q.customerName.toLowerCase().includes(needle) ||
+          q.quoteNumber.toLowerCase().includes(needle)
+      );
+    }
+    res.json({ success: true, quotes });
+  } catch (error) {
+    console.error('Error fetching quotes:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/quotes/:id', requireTenantAuth, async (req, res) => {
+  try {
+    let quote = await findTenantQuote(req, req.params.id);
+    if (!quote) {
+      return res.status(404).json({ success: false, error: 'Quote not found' });
+    }
+    quote = await expireQuoteIfStale(quote);
+    res.json({ success: true, quote: serializeQuote(quote, { detail: true }) });
+  } catch (error) {
+    console.error('Error fetching quote:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.put('/api/quotes/:id', requireTenantAuth, async (req, res) => {
+  try {
+    const existing = await findTenantQuote(req, req.params.id);
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Quote not found' });
+    }
+    if (existing.status !== 'draft') {
+      // Autosave/edit applies to drafts only. A sent (or later) quote
+      // is a historical record — revising it is an explicit act.
+      return res.status(409).json({
+        success: false,
+        code: 'REVISION_REQUIRED',
+        error: 'This quote is no longer a draft. Create a revision to edit it.'
+      });
+    }
+    const body = req.body || {};
+    const fields = normalizeQuotePayload({
+      ...body,
+      data: body.data === undefined ? safeJsonParse(existing.data) : body.data
+    });
+    if (fields.error) {
+      return res.status(400).json({ success: false, error: fields.error });
+    }
+    const linkError = await validateQuoteLinks(req, body);
+    if (linkError) {
+      return res.status(400).json({ success: false, error: linkError });
+    }
+    const quote = await prisma.quote.update({
+      where: { id: existing.id },
+      data: {
+        customerName: fields.customerName,
+        customerEmail: fields.customerEmail,
+        customerPhone: fields.customerPhone,
+        address: fields.address,
+        jobType: fields.jobType,
+        data: JSON.stringify(fields.data),
+        subtotal: moneyOrZero(fields.data.subtotal),
+        total: moneyOrZero(fields.data.total),
+        ...(body.leadId !== undefined ? { leadId: body.leadId || null } : {}),
+        ...(body.projectId !== undefined ? { projectId: body.projectId || null } : {})
+      },
+      include: { revisions: { orderBy: { version: 'asc' } } }
+    });
+    res.json({ success: true, quote: serializeQuote(quote, { detail: true }) });
+  } catch (error) {
+    console.error('Error updating quote:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/quotes/:id', requireTenantAuth, async (req, res) => {
+  try {
+    const existing = await findTenantQuote(req, req.params.id);
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Quote not found' });
+    }
+    if (existing.status !== 'draft') {
+      return res.status(409).json({
+        success: false,
+        error: 'Only draft quotes can be deleted. Archive it instead.'
+      });
+    }
+    await prisma.quote.delete({ where: { id: existing.id } });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting quote:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/quotes/:id/status', requireTenantAuth, async (req, res) => {
+  try {
+    const target = (req.body || {}).status;
+    if (!target || !QUOTE_STATUSES.includes(target)) {
+      return res.status(400).json({ success: false, error: 'Invalid quote status' });
+    }
+    if (target === 'viewed') {
+      // See the section header: 'viewed' exists in the model only.
+      // Nothing in this system can observe a customer opening a quote,
+      // so the status is never set here.
+      return res.status(400).json({
+        success: false,
+        error: "'viewed' is reserved for real view tracking, which does not exist yet; it cannot be set manually"
+      });
+    }
+    let quote = await findTenantQuote(req, req.params.id);
+    if (!quote) {
+      return res.status(404).json({ success: false, error: 'Quote not found' });
+    }
+    quote = await expireQuoteIfStale(quote);
+
+    const allowed = QUOTE_TRANSITIONS[quote.status] || [];
+    if (!allowed.includes(target)) {
+      return res.status(409).json({
+        success: false,
+        error: `Cannot move a ${quote.status} quote to ${target}`
+      });
+    }
+
+    if (target === 'sent') {
+      const sentAt = new Date();
+      const expiresAt = new Date(sentAt);
+      expiresAt.setDate(expiresAt.getDate() + pricingDefaults.QUOTE_VALIDITY_DAYS);
+      const updated = await prisma.$transaction(async (tx) => {
+        const row = await tx.quote.update({
+          where: { id: quote.id },
+          data: { status: 'sent', sentAt, expiresAt },
+          include: { revisions: { orderBy: { version: 'asc' } } }
+        });
+        // Freeze the issued version — this is the record the customer
+        // saw; its PDF must be reproducible forever.
+        await freezeQuoteRevision(tx, row, 'sent', sentAt);
+        return tx.quote.findUnique({
+          where: { id: quote.id },
+          include: { revisions: { orderBy: { version: 'asc' } } }
+        });
+      });
+      return res.json({ success: true, quote: serializeQuote(updated, { detail: true }) });
+    }
+
+    const updated = await prisma.quote.update({
+      where: { id: quote.id },
+      data: { status: target },
+      include: { revisions: { orderBy: { version: 'asc' } } }
+    });
+    res.json({ success: true, quote: serializeQuote(updated, { detail: true }) });
+  } catch (error) {
+    console.error('Error transitioning quote status:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/quotes/:id/revise', requireTenantAuth, async (req, res) => {
+  try {
+    const quote = await findTenantQuote(req, req.params.id);
+    if (!quote) {
+      return res.status(404).json({ success: false, error: 'Quote not found' });
+    }
+    if (quote.status === 'archived') {
+      return res.status(409).json({ success: false, error: 'Archived quotes cannot be revised' });
+    }
+    if (quote.status === 'draft') {
+      return res.status(409).json({ success: false, error: 'Quote is already a draft — edit it directly' });
+    }
+    const updated = await prisma.$transaction(async (tx) => {
+      // Defensive freeze: every non-draft state is normally reached via
+      // 'sent' (which already froze this version). If a version somehow
+      // has no snapshot, freeze it now before it is revised away.
+      await freezeQuoteRevision(tx, quote, quote.status, quote.sentAt || quote.updatedAt);
+      return tx.quote.update({
+        where: { id: quote.id },
+        data: {
+          version: quote.version + 1,
+          status: 'draft',
+          sentAt: null,
+          expiresAt: null
+        },
+        include: { revisions: { orderBy: { version: 'asc' } } }
+      });
+    });
+    res.json({ success: true, quote: serializeQuote(updated, { detail: true }) });
+  } catch (error) {
+    console.error('Error revising quote:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/quotes/:id/pdf-data', requireTenantAuth, async (req, res) => {
+  try {
+    const quote = await findTenantQuote(req, req.params.id);
+    if (!quote) {
+      return res.status(404).json({ success: false, error: 'Quote not found' });
+    }
+    const requested = parseInt(req.query.version, 10);
+    const revision = Number.isFinite(requested)
+      ? quote.revisions.find((r) => r.version === requested)
+      : quote.revisions[quote.revisions.length - 1];
+    if (!revision) {
+      return res.status(404).json({
+        success: false,
+        error: 'No frozen snapshot for this quote yet — a snapshot is created when a quote is sent'
+      });
+    }
+    const snapshot = safeJsonParse(revision.snapshot);
+    if (!snapshot) {
+      return res.status(500).json({ success: false, error: 'Stored snapshot is not readable JSON' });
+    }
+    res.json({
+      success: true,
+      version: revision.version,
+      // Integrity: recompute the checksum over the stored document. A
+      // mismatch means the frozen record drifted or was tampered with.
+      checksumValid: snapshotChecksum(snapshot) === revision.checksum,
+      pdfData: snapshot
+    });
+  } catch (error) {
+    console.error('Error fetching quote PDF data:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/quotes/:id/project', requireTenantAuth, async (req, res) => {
+  try {
+    const quote = await findTenantQuote(req, req.params.id);
+    if (!quote) {
+      return res.status(404).json({ success: false, error: 'Quote not found' });
+    }
+    if (quote.projectId) {
+      const project = await prisma.project.findFirst({
+        where: { AND: [{ id: quote.projectId }, scopeWhere(req)] }
+      });
+      if (project) {
+        return res.json({ success: true, created: false, project });
+      }
+    }
+    const dataDoc = safeJsonParse(quote.data) || {};
+    const project = await prisma.$transaction(async (tx) => {
+      const created = await tx.project.create({
+        data: {
+          name: quote.jobType ? `${quote.jobType} — ${quote.customerName}` : `Job for ${quote.customerName}`,
+          clientName: quote.customerName,
+          clientEmail: quote.customerEmail,
+          clientPhone: quote.customerPhone,
+          address: quote.address,
+          jobType: quote.jobType,
+          description: typeof dataDoc.notes === 'string' ? dataDoc.notes : null,
+          status: 'active',
+          contractorAccountId: req.tenantId,
+          createdById: req.dbUser.id
+        }
+      });
+      await tx.quote.update({ where: { id: quote.id }, data: { projectId: created.id } });
+      return created;
+    });
+    res.status(201).json({ success: true, created: true, project });
+  } catch (error) {
+    console.error('Error creating project from quote:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ---------- Command home summary (/api/ops/summary) ----------
-// Real numbers for the command home's business strip, computed from the
-// existing engine models. Quotes: the Estimate model carries no status
-// of its own, so "quotes out" counts estimates on projects still in the
-// system's one open status ('active') — quoted, not yet closed.
+// Real numbers for the command home's business strip. Quotes come from
+// the Pass Ten Quote Ledger: "quotes out" counts quotes actually in
+// sent/viewed status (Pass Nine's approximation over the status-less
+// Estimate model is gone), and the `quotes` block breaks the ledger
+// down for the command center's Quotes area.
 app.get('/api/ops/summary', requireTenantAuth, async (req, res) => {
   try {
     const scope = scopeWhere(req);
@@ -3381,11 +3964,25 @@ app.get('/api/ops/summary', requireTenantAuth, async (req, res) => {
     startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
     const startOfMonth = new Date(startOfToday.getFullYear(), startOfToday.getMonth(), 1);
 
-    const [openEstimates, followUpsDue, monthReceipts, jobsToday, newLeads, queuedItems] =
+    // Mechanical expiry sweep (Pass Ten): sent/viewed quotes past
+    // their own validity window count as expired everywhere, including
+    // here. Deterministic from stored timestamps — not activity.
+    await prisma.quote.updateMany({
+      where: {
+        AND: [
+          scope,
+          { status: { in: ['sent', 'viewed'] } },
+          { expiresAt: { lt: new Date() } }
+        ]
+      },
+      data: { status: 'expired' }
+    });
+
+    const [quoteRows, followUpsDue, monthReceipts, jobsToday, newLeads, queuedItems] =
       await Promise.all([
-        prisma.estimate.findMany({
-          where: { AND: [scope, { project: { status: 'active' } }] },
-          select: { totalCost: true }
+        prisma.quote.findMany({
+          where: scope,
+          select: { status: true, total: true }
         }),
         prisma.followUpReminder.count({
           where: {
@@ -3414,12 +4011,23 @@ app.get('/api/ops/summary', requireTenantAuth, async (req, res) => {
         prisma.opsItem.count({ where: { AND: [scope, { status: 'queued' }] } })
       ]);
 
+    const quoteBucket = (statuses) => {
+      const rows = quoteRows.filter((q) => statuses.includes(q.status));
+      return {
+        count: rows.length,
+        total: rows.reduce((sum, q) => sum + Number(q.total), 0)
+      };
+    };
+
     res.json({
       success: true,
       summary: {
-        quotesOut: {
-          count: openEstimates.length,
-          total: openEstimates.reduce((sum, e) => sum + Number(e.totalCost), 0)
+        quotesOut: quoteBucket(['sent', 'viewed']),
+        quotes: {
+          drafts: quoteBucket(['draft']),
+          sent: quoteBucket(['sent', 'viewed']),
+          accepted: quoteBucket(['accepted']),
+          closedOut: quoteBucket(['expired', 'declined'])
         },
         followUpsDue: { count: followUpsDue },
         receiptsThisMonth: {

@@ -407,7 +407,7 @@ const EstimateForm = () => {
   };
 
   const handleViewResults = () => {
-    navigate('/estimate-results', {
+    navigate('/result', {
       state: {
         projectInfo,
         rooms,
