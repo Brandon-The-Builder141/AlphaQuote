@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   User,
@@ -10,6 +10,9 @@ import {
   Check
 } from 'lucide-react';
 
+import { getQuote, createQuote, updateQuote, buildQuotePayloadFromWizard } from '../api/quotes';
+import { showError } from '../utils/toastService';
+
 // Step Components
 import ClientInfoStep from './wizard-steps/ClientInfoStep';
 import WorkItemsSetupStep from './wizard-steps/WorkItemsSetupStep';
@@ -18,6 +21,22 @@ import EstimateSummaryStep from './wizard-steps/EstimateSummaryStep';
 
 export default function AlphaQuoteWizard() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const urlQuoteId = searchParams.get('quoteId');
+
+  // Pass 10: the wizard works on a durable draft quote. quoteId lives
+  // OUTSIDE wizardData (wizardData is the autosave source — the id must
+  // never be stored inside the quote's own data doc).
+  const [quoteId, setQuoteId] = useState(urlQuoteId || null);
+  const quoteIdRef = useRef(urlQuoteId || null);
+  const [quoteNumber, setQuoteNumber] = useState(null);
+  const [saveState, setSaveState] = useState(''); // '' | 'saving' | 'saved'
+  const hydratingRef = useRef(false);
+  const hydratedRef = useRef(false);
+  // JSON of the last payload known to be on the server — the autosave
+  // skips when the wizard still matches it (e.g. right after hydration).
+  const lastSavedPayloadRef = useRef(null);
+
   const [currentStep, setCurrentStep] = useState(1);
   const [wizardData, setWizardData] = useState({
     // Client Info
@@ -43,6 +62,85 @@ export default function AlphaQuoteWizard() {
     taxAmount: 0,
     total: 0
   });
+
+  // Hydrate from an existing draft when opened as /estimate?quoteId=…
+  useEffect(() => {
+    if (!urlQuoteId || hydratedRef.current) return;
+    hydratedRef.current = true;
+    hydratingRef.current = true;
+    (async () => {
+      try {
+        const quote = await getQuote(urlQuoteId);
+        const doc = quote.data || {};
+        const info = doc.projectInfo || {};
+        quoteIdRef.current = quote.id;
+        setQuoteId(quote.id);
+        setQuoteNumber(quote.quoteNumber);
+        const hydratedData = {
+          clientName: info.clientName || quote.customerName || '',
+          jobType: info.jobType || quote.jobType || 'Residential',
+          email: info.email || quote.customerEmail || '',
+          phone: info.phone || quote.customerPhone || '',
+          address: info.address || quote.address || '',
+          workItems: doc.workItems || [],
+          notes: doc.notes || '',
+          markup: doc.markup != null ? doc.markup : 15,
+          taxEnabled: !!doc.taxEnabled,
+          taxRate: doc.taxRate || 0,
+          discount: doc.discount || 0,
+          subtotal: doc.subtotal != null ? doc.subtotal : 0,
+          markupAmount: doc.markupAmount != null ? doc.markupAmount : 0,
+          taxAmount: doc.taxAmount != null ? doc.taxAmount : 0,
+          total: doc.total != null ? doc.total : 0
+        };
+        // The hydrated doc is already saved — mark its payload so the
+        // autosave doesn't immediately write it back.
+        lastSavedPayloadRef.current = JSON.stringify(buildQuotePayloadFromWizard(hydratedData));
+        setWizardData(hydratedData);
+        setSaveState('saved');
+        hydratingRef.current = false;
+      } catch (error) {
+        showError(error.message);
+        hydratingRef.current = false;
+      }
+    })();
+  }, [urlQuoteId]);
+
+  // Draft autosave: ~1s after the last change, persist the wizard as a
+  // quote. First meaningful save creates the draft (the URL is left
+  // alone); later saves update it in place.
+  useEffect(() => {
+    if (hydratingRef.current) return; // hydration in flight — not an edit
+    const hasContent =
+      (wizardData.clientName && wizardData.clientName.trim() !== '') ||
+      (wizardData.workItems && wizardData.workItems.length > 0);
+    if (!hasContent) return;
+
+    const payload = buildQuotePayloadFromWizard(wizardData);
+    const payloadJson = JSON.stringify(payload);
+    if (payloadJson === lastSavedPayloadRef.current) return; // already saved
+
+    setSaveState('saving');
+    const timer = setTimeout(async () => {
+      try {
+        if (quoteIdRef.current) {
+          const quote = await updateQuote(quoteIdRef.current, payload);
+          setQuoteNumber(quote.quoteNumber);
+        } else {
+          const quote = await createQuote(payload);
+          quoteIdRef.current = quote.id;
+          setQuoteId(quote.id);
+          setQuoteNumber(quote.quoteNumber);
+        }
+        lastSavedPayloadRef.current = payloadJson;
+        setSaveState('saved');
+      } catch (error) {
+        setSaveState('');
+        showError(`Draft autosave failed: ${error.message}`);
+      }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [wizardData]);
 
   const steps = [
     {
@@ -103,7 +201,7 @@ export default function AlphaQuoteWizard() {
   const CurrentStepComponent = steps[currentStep - 1].component;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 py-8 px-4">
+    <div className="min-h-screen iron-bg py-8 px-4">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <motion.div
@@ -123,6 +221,12 @@ export default function AlphaQuoteWizard() {
             <div>
               <h1 className="text-3xl font-heading text-white mb-2">Create New Estimate</h1>
               <p className="text-slate-400">Step {currentStep} of {steps.length}: {steps[currentStep - 1].description}</p>
+              {saveState === 'saving' && (
+                <p className="text-xs text-slate-500 mt-1.5">Saving…</p>
+              )}
+              {saveState === 'saved' && quoteNumber && (
+                <p className="text-xs text-slate-500 mt-1.5">Draft {quoteNumber} · Saved</p>
+              )}
             </div>
             <div className="hidden md:block">
               <div className="flex items-center space-x-2 bg-slate-900/50 px-4 py-2 rounded-full border border-slate-800">
@@ -208,7 +312,7 @@ export default function AlphaQuoteWizard() {
             transition={{ duration: 0.3 }}
           >
             <CurrentStepComponent
-              data={wizardData}
+              data={{ ...wizardData, quoteId }}
               updateData={updateWizardData}
               onNext={handleNext}
               onBack={handleBack}

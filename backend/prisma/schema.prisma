@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -154,6 +154,7 @@ model Project {
   tasks        Task[]
   estimates    Estimate[]
   receipts     Receipt[]
+  quotes       Quote[]
   scheduledJobs ScheduledJob[]
   
   // Multi-user relationships
@@ -290,6 +291,11 @@ model FollowUpReminder {
   // Relations
   template    FollowUpTemplate? @relation(fields: [templateId], references: [id])
   templateId  String?
+
+  // Multi-user ownership (Pass Two: added so follow-ups can be tenant-scoped
+  // like every other multi-user model; scalar fields, stamped by the API)
+  contractorAccountId String?
+  createdById         String?
 }
 
 // Email templates for follow-ups
@@ -335,17 +341,24 @@ model ContractorAccount {
   scheduledJobs ScheduledJob[]
   scheduledJobReminders ScheduledJobReminder[]
   calendarSyncSettings CalendarSyncSettings[]
+  leads       Lead[]
+  opsItems    OpsItem[]
+  dayCards    DayCard[]
+  quotes      Quote[]
+  quoteCounter QuoteCounter?
 }
 
 // User accounts within contractor accounts
 model User {
   id          String   @id @default(cuid())
+  clerkId     String?  @unique // Clerk user id (Pass Two finish); null on legacy rows until first authenticated contact backfills it
   email       String   @unique
   firstName   String
   lastName    String
   password    String   // hashed password
   role        String   @default("viewer") // viewer, editor, admin
   isActive    Boolean  @default(true)
+  setupCompletedAt DateTime? // one-time company setup finished (live fixes, 2026-11-02); null = setup still owed
   lastLogin   DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -362,6 +375,10 @@ model User {
   createdFollowUpTemplates FollowUpTemplate[]
   createdTaskTemplates TaskTemplate[]
   createdScheduledJobs ScheduledJob[]
+  createdLeads        Lead[]
+  createdOpsItems     OpsItem[]
+  createdDayCards     DayCard[]
+  createdQuotes       Quote[]
 }
 
 // Project and Estimate models already defined above
@@ -461,4 +478,167 @@ model CalendarSyncSettings {
   // Multi-user relationships
   contractorAccount   ContractorAccount? @relation(fields: [contractorAccountId], references: [id], onDelete: Cascade)
   contractorAccountId String?
+}
+
+// Pass Nine (Command Center): the Lead Board. Homeowner leads sourced
+// from county auditor sale records (seeded once per tenant from
+// backend/config/leadSeed.json) plus any leads added by hand. Status
+// walks the call pipeline: new -> calling -> quoted -> won / dead.
+model Lead {
+  id          String   @id @default(cuid())
+  name        String   // buyer name from the sale record
+  address     String   // property address
+  city        String
+  phone       String?
+  saleDate    DateTime?
+  salePrice   Decimal?
+  acres       Float?
+  parcelId    String?  // auditor parcel id; dedupe key, unique per tenant
+  source      String   @default("Auditor sales")
+  status      String   @default("new") // new, calling, quoted, won, dead
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Multi-user relationships
+  contractorAccount   ContractorAccount? @relation(fields: [contractorAccountId], references: [id], onDelete: Cascade)
+  contractorAccountId String?
+  createdBy           User?              @relation(fields: [createdById], references: [id])
+  createdById         String?
+
+  quotes              Quote[]
+
+  @@unique([contractorAccountId, parcelId])
+}
+
+// Pass Nine (Command Center): the approval queue. Work Solen produces
+// (follow-up drafts, ad copy, lead scans, price checks, notes) lands
+// here as queued items; nothing customer-facing leaves without Brandon
+// moving an item past queued. Status: queued -> approved -> done, or
+// dismissed from anywhere.
+model OpsItem {
+  id        String   @id @default(cuid())
+  kind      String   // followup, ad, lead-scan, price-check, note
+  title     String
+  body      String
+  status    String   @default("queued") // queued, approved, dismissed, done
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Multi-user relationships
+  contractorAccount   ContractorAccount? @relation(fields: [contractorAccountId], references: [id], onDelete: Cascade)
+  contractorAccountId String?
+  createdBy           User?              @relation(fields: [createdById], references: [id])
+  createdById         String?
+}
+
+// Pass Nine (Command Center): the Today card on the command home — one
+// row per tenant per day holding the morning flow's must-win and the
+// Daily Brick. `date` is the operator's local day, YYYY-MM-DD.
+model DayCard {
+  id        String   @id @default(cuid())
+  date      String   // YYYY-MM-DD (operator-local)
+  mustWin   String   @default("")
+  brick     String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Multi-user relationships
+  contractorAccount   ContractorAccount? @relation(fields: [contractorAccountId], references: [id], onDelete: Cascade)
+  contractorAccountId String?
+  createdBy           User?              @relation(fields: [createdById], references: [id])
+  createdById         String?
+
+  @@unique([contractorAccountId, date])
+}
+
+// Pass Ten (Durable Quote Ledger): a quote is a first-class, persisted
+// business record — not browser state. It survives refresh, logout,
+// browser changes, and deploys because it lives here, in Postgres.
+//
+//  - `quoteNumber` is stable and human-readable (IL-0001, IL-0002, ...),
+//    assigned from the tenant's QuoteCounter row inside a transaction.
+//    Never random, never reused within a tenant.
+//  - `data` holds the full working quote document as JSON in exactly the
+//    shape the PDF renderer consumes (projectInfo, workItems, rooms,
+//    markup, tax, discount, totals, notes, estimateType), so the working
+//    copy and the issued copy can never drift into different formats.
+//  - Status walks: draft -> sent -> accepted / declined / expired, with
+//    archived reachable from every state. `viewed` is a supported status
+//    in the model ONLY: no endpoint sets it, because there is no real
+//    customer-view tracking mechanism, and this app does not invent
+//    customer activity. If a tracked share link ever ships, the status
+//    is ready for it.
+//  - Editing a non-draft quote never rewrites history: POST
+//    /api/quotes/:id/revise freezes the outgoing version (see
+//    QuoteRevision) and returns the quote to draft at version + 1.
+model Quote {
+  id            String    @id @default(cuid())
+  quoteNumber   String    // IL-0001 — per-tenant sequence, see QuoteCounter
+  status        String    @default("draft") // draft, sent, viewed, accepted, declined, expired, archived
+  version       Int       @default(1)       // current revision number (1-based)
+  customerName  String
+  customerEmail String?
+  customerPhone String?
+  address       String?
+  jobType       String?
+  data          String    // JSON: full working quote document (PDF shape)
+  subtotal      Decimal   @default(0)
+  total         Decimal   @default(0)
+  sentAt        DateTime? // when the current version was marked sent
+  expiresAt     DateTime? // sentAt + quote validity days (14 per pricing sheet)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Optional links: the lead this quote came from, and the project/job
+  // it turns into when accepted.
+  lead          Lead?     @relation(fields: [leadId], references: [id])
+  leadId        String?
+  project       Project?  @relation(fields: [projectId], references: [id])
+  projectId     String?
+
+  revisions     QuoteRevision[]
+
+  // Multi-user relationships
+  contractorAccount   ContractorAccount? @relation(fields: [contractorAccountId], references: [id], onDelete: Cascade)
+  contractorAccountId String?
+  createdBy           User?              @relation(fields: [createdById], references: [id])
+  createdById         String?
+
+  @@unique([contractorAccountId, quoteNumber])
+  @@index([contractorAccountId, status])
+}
+
+// Pass Ten (Durable Quote Ledger): the frozen record of one issued
+// version of a quote. Written when a version is marked sent (and,
+// defensively, when a non-draft version is revised away). `snapshot`
+// is the complete quote document at freeze time — customer details,
+// line items, materials, labor, markup, tax, terms, notes, totals,
+// company details, quote number, and timestamps — everything needed to
+// regenerate the identical PDF later via GET /api/quotes/:id/pdf-data.
+// `checksum` is the SHA-256 of the canonical snapshot JSON, so any
+// later tampering or drift is detectable. Rows are never updated after
+// creation.
+model QuoteRevision {
+  id        String   @id @default(cuid())
+  quote     Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  quoteId   String
+  version   Int      // the Quote.version this snapshot froze
+  status    String   // quote status at freeze time (e.g. "sent")
+  snapshot  String   // JSON: the complete frozen quote document
+  checksum  String   // SHA-256 hex of the canonical snapshot JSON
+  total     Decimal  @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([quoteId, version])
+}
+
+// Pass Ten (Durable Quote Ledger): per-tenant quote-number sequence.
+// One row per contractor account; the API increments `nextNumber`
+// inside a transaction when a quote is created, so numbers are
+// deterministic, gapless per tenant, and never random.
+model QuoteCounter {
+  contractorAccount   ContractorAccount @relation(fields: [contractorAccountId], references: [id], onDelete: Cascade)
+  contractorAccountId String            @id
+  nextNumber          Int               @default(1)
 }

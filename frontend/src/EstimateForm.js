@@ -7,6 +7,7 @@ import ChangeOrderManager from './components/ChangeOrderManager';
 import RegionalPricePack from './components/RegionalPricePack';
 import TaskTemplates from './components/TaskTemplates';
 import { API_BASE_URL } from './config/env';
+import { MINIMUM_JOB_AMOUNT } from './utils/pricingConstants';
 import { generateQuotePDF } from './utils/pdfService';
 import { showSuccess, showError } from './utils/toastService';
 import {
@@ -406,7 +407,7 @@ const EstimateForm = () => {
   };
 
   const handleViewResults = () => {
-    navigate('/estimate-results', {
+    navigate('/result', {
       state: {
         projectInfo,
         rooms,
@@ -493,14 +494,14 @@ const EstimateForm = () => {
 
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white font-body overflow-hidden relative">
+    <div className="min-h-screen iron-bg text-white font-body overflow-hidden relative">
       {/* Animated Background Elements */}
       <div className="absolute inset-0 overflow-hidden">
         {/* Blueprint Grid Pattern */}
         <div
           className="absolute inset-0 opacity-[0.02] animate-pulse"
           style={{
-            backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'100\' height=\'100\' viewBox=\'0 0 100 100\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cdefs%3E%3Cpattern id=\'grid\' width=\'10\' height=\'10\' patternUnits=\'userSpaceOnUse\'%3E%3Cpath d=\'M 10 0 L 0 0 0 10\' fill=\'none\' stroke=\'%2314B8A6\' stroke-width=\'0.5\'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width=\'100\' height=\'100\' fill=\'url(%23grid)\'/%3E%3C/svg%3E")'
+            backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'100\' height=\'100\' viewBox=\'0 0 100 100\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cdefs%3E%3Cpattern id=\'grid\' width=\'10\' height=\'10\' patternUnits=\'userSpaceOnUse\'%3E%3Cpath d=\'M 10 0 L 0 0 0 10\' fill=\'none\' stroke=\'%23FF5C1A\' stroke-width=\'0.5\'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width=\'100\' height=\'100\' fill=\'url(%23grid)\'/%3E%3C/svg%3E")'
           }}
         ></div>
 
@@ -548,7 +549,7 @@ const EstimateForm = () => {
             <div className="w-px h-6 bg-slate-700"></div>
             <h1 className="text-3xl font-heading text-white flex items-center gap-3">
               <Calculator className="w-8 h-8 text-primary" />
-              AlphaQuote Estimator
+              Advanced Estimator
             </h1>
           </div>
           <div className="flex items-center space-x-4">
@@ -603,21 +604,21 @@ const EstimateForm = () => {
             </motion.button>
             <button
               onClick={() => navigate('/receipts')}
-              className="bg-orange-600 hover:bg-orange-500 text-white px-3 py-2 rounded-lg text-xs transition-colors duration-200"
+              className="btn-steel !min-h-[38px] !py-1.5 !px-3.5 !text-[0.85rem]"
             >
-              📄 Receipts
+              Receipts
             </button>
             <button
               onClick={() => navigate('/vendors')}
-              className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded-lg text-xs transition-colors duration-200"
+              className="btn-steel !min-h-[38px] !py-1.5 !px-3.5 !text-[0.85rem]"
             >
-              🏪 Vendors
+              Vendors
             </button>
             <button
               onClick={() => navigate('/projects')}
-              className="bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded-lg text-xs transition-colors duration-200"
+              className="btn-steel !min-h-[38px] !py-1.5 !px-3.5 !text-[0.85rem]"
             >
-              📋 Projects
+              Projects
             </button>
           </div>
         </motion.div>
@@ -754,9 +755,9 @@ const EstimateForm = () => {
             <div className="flex items-center space-x-6">
               <button
                 onClick={handleLoadDemoData}
-                className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg transition-colors duration-200"
+                className="btn-steel !min-h-[40px] !py-2 text-sm"
               >
-                🎯 Load Demo Data
+                Load Demo Data
               </button>
               <div className="flex items-center space-x-2">
                 <label className="text-sm text-gray-300">Markup %:</label>
@@ -775,6 +776,13 @@ const EstimateForm = () => {
                 <div className="text-sm text-gray-400">Subtotal: <span className="text-white font-semibold">${calculateSubtotal()}</span></div>
                 <div className="text-sm text-gray-400">Markup ({markup}%): <span className="text-white font-semibold">${calculateMarkupAmount()}</span></div>
                 <div className="text-lg text-neon-blue font-bold">Total: ${calculateTotal()}</div>
+                {/* Pass Five: Iron Legion minimum job is $350 — warn
+                    while quoting instead of silently going below it. */}
+                {parseFloat(calculateTotal()) > 0 && parseFloat(calculateTotal()) < MINIMUM_JOB_AMOUNT && (
+                  <div className="text-sm text-amber-400 font-medium mt-1">
+                    Below the ${MINIMUM_JOB_AMOUNT} minimum job — Iron Legion's minimum charge is ${MINIMUM_JOB_AMOUNT}.
+                  </div>
+                )}
               </div>
               <motion.button
                 onClick={handleGenerateEstimate}
@@ -796,7 +804,7 @@ const EstimateForm = () => {
             {/* Quote Preview */}
             <div id="quote-preview" className="bg-white text-gray-900 p-8 rounded-lg border border-gray-300 shadow-lg">
               <div className="text-center mb-8">
-                <h1 className="text-3xl font-bold text-gray-800 mb-2">🧮 AlphaQuote Estimate</h1>
+                <h1 className="text-3xl font-bold text-gray-800 mb-2">Iron Legion Contracting — Estimate</h1>
                 <p className="text-gray-600">Professional Construction Estimate</p>
                 <p className="text-sm text-gray-500 mt-2">Date: {new Date().toLocaleDateString()}</p>
               </div>
@@ -939,29 +947,29 @@ const EstimateForm = () => {
                   </div>
                   <div className="flex justify-between text-xl font-bold border-t border-gray-400 pt-2">
                     <span>Total:</span>
-                    <span className="text-blue-600">${calculateTotal()}</span>
+                    <span className="text-primary">${calculateTotal()}</span>
                   </div>
                 </div>
               </div>
 
               <div className="mt-6 text-center text-sm text-gray-600">
-                <p>Thank you for choosing AlphaQuote for your construction needs.</p>
-                <p>This estimate is valid for 30 days from the date above.</p>
+                <p>Thank you for choosing Iron Legion Contracting for your construction needs.</p>
+                <p>This estimate is valid for 14 days from the date above.</p>
               </div>
             </div>
 
             {/* Action Buttons */}
-            <div className="flex justify-center space-x-4">
+            <div className="flex flex-wrap justify-center gap-3">
               <button
                 onClick={handleViewResults}
-                className="bg-green-600 hover:bg-green-500 text-white px-6 py-2 rounded-lg transition-colors duration-200"
+                className="btn-steel"
               >
-                📋 View Detailed Results
+                View Detailed Results
               </button>
               <button
                 onClick={handleDownloadPDF}
                 disabled={isGeneratingPDF}
-                className="bg-red-600 hover:bg-red-500 text-white px-6 py-2 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="btn-ember disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isGeneratingPDF ? (
                   <>
@@ -969,17 +977,14 @@ const EstimateForm = () => {
                     <span>Generating...</span>
                   </>
                 ) : (
-                  <>
-                    <span>📄</span>
-                    <span>Download PDF</span>
-                  </>
+                  <span>Download PDF</span>
                 )}
               </button>
               <button
                 onClick={() => setShowEmailForm(true)}
-                className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg transition-colors duration-200"
+                className="btn-steel"
               >
-                📧 Email Quote
+                Email Quote
               </button>
             </div>
 
@@ -1049,7 +1054,7 @@ const EstimateForm = () => {
                 <button
                   onClick={handleEmailQuote}
                   disabled={!emailData.recipient || emailStatus === 'sending'}
-                  className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-500 text-white px-4 py-2 rounded-lg transition-colors duration-200"
+                  className="btn-ember !min-h-[42px] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {emailStatus === 'sending' ? 'Sending...' : 'Send Email'}
                 </button>
